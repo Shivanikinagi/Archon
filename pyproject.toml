@@ -1,0 +1,147 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "deep-research-agent"
+version = "1.0.0"
+description = "Production-grade autonomous research platform with RAG and GraphRAG"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "Research Agent Team", email = "team@example.com"}
+]
+keywords = ["ai", "research", "rag", "graphrag", "knowledge-graph", "llm"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+    # Core LLM & Orchestration
+    "langchain>=0.1.0",
+    "langchain-community>=0.0.10",
+    "langchain-openai>=0.0.5",
+    "llama-index>=0.9.0",
+    
+    # Data & Storage
+    "chromadb>=0.4.0",
+    "pinecone-client>=3.0.0",
+    "weaviate-client>=4.0.0",
+    "sqlalchemy>=2.0.0",
+    "psycopg2-binary>=2.9.0",
+    
+    # Knowledge Graphs
+    "networkx>=3.0",
+    "pyvis>=0.3.0",
+    "py2neo>=5.0.0",
+    "neo4j>=5.0.0",
+    
+    # Document Processing
+    "pypdf>=3.0.0",
+    "python-docx>=0.8.11",
+    "markdown>=3.4.0",
+    "beautifulsoup4>=4.12.0",
+    "unstructured>=0.10.0",
+    "pillow>=10.0.0",
+    "pydantic>=2.0.0",
+    
+    # Web & APIs
+    "requests>=2.31.0",
+    "aiohttp>=3.8.0",
+    "httpx>=0.24.0",
+    "selenium>=4.10.0",
+    "playwright>=1.40.0",
+    
+    # Data Processing
+    "pandas>=2.0.0",
+    "numpy>=1.24.0",
+    "scipy>=1.11.0",
+    "scikit-learn>=1.3.0",
+    
+    # REST API
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    "pydantic-settings>=2.0.0",
+    
+    # Local LLM Runtime
+    "ollama>=0.1.0",
+    
+    # Utilities
+    "python-dotenv>=1.0.0",
+    "pyyaml>=6.0",
+    "loguru>=0.7.0",
+    "rich>=13.0.0",
+    "click>=8.1.0",
+    "typer>=0.9.0",
+    "tenacity>=8.2.0",
+    "tqdm>=4.66.0",
+    
+    # Testing
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "flake8>=6.0.0",
+    "mypy>=1.5.0",
+    "pre-commit>=3.3.0",
+    "sphinx>=7.0.0",
+    "sphinx-rtd-theme>=1.3.0",
+]
+
+gpu = [
+    "torch>=2.0.0",
+    "transformers>=4.30.0",
+    "faiss-gpu>=1.7.0",
+]
+
+postgres = [
+    "pgvector>=0.2.0",
+]
+
+neo4j_db = [
+    "py2neo>=5.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/your-org/deep-research-agent"
+Documentation = "https://deep-research-agent.readthedocs.io"
+Repository = "https://github.com/your-org/deep-research-agent"
+"Bug Tracker" = "https://github.com/your-org/deep-research-agent/issues"
+
+[tool.setuptools]
+packages = ["src"]
+
+[tool.black]
+line-length = 100
+target-version = ['py310', 'py311', 'py312']
+
+[tool.isort]
+profile = "black"
+line_length = 100
+skip_glob = ["*/migrations/*"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--strict-markers -v --cov=src --cov-report=html"
+markers = [
+    "unit: Unit tests",
+    "integration: Integration tests",
+    "slow: Slow tests",
+]

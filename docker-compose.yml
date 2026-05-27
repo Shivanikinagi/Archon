@@ -1,0 +1,163 @@
+version: '3.8'
+
+services:
+  # Ollama - Local LLM Runtime
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    environment:
+      - OLLAMA_HOST=0.0.0.0:11434
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - research-network
+
+  # ChromaDB - Vector Store (optional, if using instead of local ChromaDB)
+  chroma:
+    image: ghcr.io/chroma-core/chroma:latest
+    container_name: chroma
+    ports:
+      - "8001:8000"
+    environment:
+      - CHROMA_DB_IMPL=duckdb+parquet
+      - CHROMA_PERSIST_DIRECTORY=/data
+    volumes:
+      - chroma_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - research-network
+    depends_on:
+      - ollama
+
+  # Neo4j - Knowledge Graph Store (optional)
+  neo4j:
+    image: neo4j:latest
+    container_name: neo4j
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    environment:
+      - NEO4J_AUTH=neo4j/password
+      - NEO4J_PLUGINS=["apoc", "graph-data-science"]
+    volumes:
+      - neo4j_data:/data
+    healthcheck:
+      test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "password", "RETURN 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - research-network
+    depends_on:
+      - ollama
+
+  # Deep Research Agent API
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: research-api
+    ports:
+      - "8000:8000"
+    environment:
+      # LLM Configuration
+      - OLLAMA_ENABLED=true
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_MODEL=mistral
+      - OLLAMA_EMBEDDING_MODEL=nomic-embed-text
+      - OLLAMA_TIMEOUT=300
+      
+      # Vector Store Configuration
+      - CHROMA_PERSIST_DIR=/data/chroma_db
+      - CHROMA_COLLECTION_NAME=research_documents
+      
+      # Knowledge Graph Configuration
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USERNAME=neo4j
+      - NEO4J_PASSWORD=password
+      
+      # API Configuration
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - API_WORKERS=4
+      
+      # Logging
+      - LOG_LEVEL=INFO
+      - LOG_FILE=/logs/research_agent.log
+      
+      # Environment
+      - ENVIRONMENT=development
+      - DEBUG=false
+    volumes:
+      - ./data:/data
+      - ./logs:/logs
+    depends_on:
+      ollama:
+        condition: service_healthy
+      chroma:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+    networks:
+      - research-network
+    command: python -m src.cli api-run
+
+  # Milvus - Alternative Vector Store (optional)
+  # Uncomment to use Milvus instead of ChromaDB
+  # milvus:
+  #   image: milvusdb/milvus:latest
+  #   container_name: milvus
+  #   ports:
+  #     - "19530:19530"
+  #     - "9091:9091"
+  #   depends_on:
+  #     - etcd
+  #     - minio
+  #   networks:
+  #     - research-network
+
+  # pgvector - PostgreSQL with Vector Support (optional)
+  pgvector:
+    image: ankane/pgvector:latest
+    container_name: pgvector
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=research
+      - POSTGRES_PASSWORD=research_password
+      - POSTGRES_DB=research_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U research"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - research-network
+
+volumes:
+  ollama_data:
+    driver: local
+  chroma_data:
+    driver: local
+  neo4j_data:
+    driver: local
+  postgres_data:
+    driver: local
+
+networks:
+  research-network:
+    driver: bridge
