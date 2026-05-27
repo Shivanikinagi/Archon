@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useStore } from '../stores/useStore.js'
 import { listEntities } from '../services/api.js'
+import GraphVisualization from '../components/GraphVisualization.jsx'
 import {
   Network,
   Search,
@@ -9,6 +10,7 @@ import {
   Link2,
   ChevronRight,
   Hash,
+  Info,
 } from 'lucide-react'
 
 export default function Graphs() {
@@ -16,101 +18,21 @@ export default function Graphs() {
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedEntity, setSelectedEntity] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [viewMode, setViewMode] = useState('split') // 'split' | 'graph'
 
   useEffect(() => {
     const fetchEntities = async () => {
       try {
         const data = await listEntities()
         const fetched = data.entities || data || []
-        // If backend returns no entities, show demo data so the page isn't empty
         if (fetched.length === 0) {
-          setEntities([
-            {
-              id: 'demo-1',
-              name: 'Blockchain',
-              type: 'Technology',
-              description: 'A decentralized, distributed ledger technology that records transactions across multiple computers.',
-              properties: { origin: '2008', creator: 'Satoshi Nakamoto', category: 'Distributed Systems' },
-              relationships: [
-                { type: 'enables', target: 'Cryptocurrency' },
-                { type: 'uses', target: 'Consensus Mechanisms' },
-              ],
-            },
-            {
-              id: 'demo-2',
-              name: 'Cryptocurrency',
-              type: 'Financial Instrument',
-              description: 'Digital or virtual currency that uses cryptography for security and operates on blockchain networks.',
-              properties: { market_cap: '$2.5T', top_coins: 'Bitcoin, Ethereum', volatility: 'High' },
-              relationships: [
-                { type: 'built_on', target: 'Blockchain' },
-                { type: 'regulated_by', target: 'SEC' },
-              ],
-            },
-            {
-              id: 'demo-3',
-              name: 'Smart Contracts',
-              type: 'Software',
-              description: 'Self-executing contracts with the terms of the agreement directly written into code.',
-              properties: { platforms: 'Ethereum, Solana', language: 'Solidity', use_cases: 'DeFi, NFTs' },
-              relationships: [
-                { type: 'runs_on', target: 'Blockchain' },
-                { type: 'powers', target: 'DeFi' },
-              ],
-            },
-            {
-              id: 'demo-4',
-              name: 'Consensus Mechanisms',
-              type: 'Algorithm',
-              description: 'Protocols that ensure all nodes in a blockchain network agree on the current state of the ledger.',
-              properties: { types: 'PoW, PoS, DPoS', energy_usage: 'Variable', security: 'High' },
-              relationships: [
-                { type: 'secures', target: 'Blockchain' },
-                { type: 'validates', target: 'Cryptocurrency' },
-              ],
-            },
-            {
-              id: 'demo-5',
-              name: 'DeFi',
-              type: 'Ecosystem',
-              description: 'Decentralized Finance — financial services built on blockchain without traditional intermediaries.',
-              properties: { tvl: '$100B+', protocols: 'Uniswap, Aave', risk: 'Smart contract risk' },
-              relationships: [
-                { type: 'uses', target: 'Smart Contracts' },
-                { type: 'disrupts', target: 'Traditional Finance' },
-              ],
-            },
-          ])
+          setEntities(getDemoEntities())
         } else {
           setEntities(fetched)
         }
       } catch (err) {
         console.error('Failed to fetch entities:', err)
-        // Show demo data on error too
-        setEntities([
-          {
-            id: 'demo-1',
-            name: 'Blockchain',
-            type: 'Technology',
-            description: 'A decentralized, distributed ledger technology that records transactions across multiple computers.',
-            properties: { origin: '2008', creator: 'Satoshi Nakamoto', category: 'Distributed Systems' },
-            relationships: [
-              { type: 'enables', target: 'Cryptocurrency' },
-              { type: 'uses', target: 'Consensus Mechanisms' },
-            ],
-          },
-          {
-            id: 'demo-2',
-            name: 'Cryptocurrency',
-            type: 'Financial Instrument',
-            description: 'Digital or virtual currency that uses cryptography for security and operates on blockchain networks.',
-            properties: { market_cap: '$2.5T', top_coins: 'Bitcoin, Ethereum', volatility: 'High' },
-            relationships: [
-              { type: 'built_on', target: 'Blockchain' },
-              { type: 'regulated_by', target: 'SEC' },
-            ],
-          },
-        ])
+        setEntities(getDemoEntities())
       } finally {
         setIsLoading(false)
       }
@@ -138,10 +60,56 @@ export default function Graphs() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Graphs</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Knowledge Graph</h1>
         <p className="mt-1 text-gray-600 dark:text-gray-400">
-          Explore knowledge graph entities and their relationships
+          Explore entities, relationships, and reasoning paths extracted from research
         </p>
+      </div>
+
+      {/* Graph Visualization */}
+      <div className="card p-0 overflow-hidden">
+        <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Network className="w-4 h-4 text-primary-600 dark:text-primary-400" />
+            <h3 className="font-semibold text-gray-900 dark:text-white text-sm">
+              Graph Visualization
+            </h3>
+            <span className="text-xs text-gray-500 dark:text-gray-400">
+              {entities?.length || 0} nodes
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setViewMode('split')}
+              className={`text-xs px-2 py-1 rounded-md transition-colors ${
+                viewMode === 'split'
+                  ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
+                  : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+              }`}
+            >
+              Split View
+            </button>
+            <button
+              onClick={() => setViewMode('graph')}
+              className={`text-xs px-2 py-1 rounded-md transition-colors ${
+                viewMode === 'graph'
+                  ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
+                  : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+              }`}
+            >
+              Full Graph
+            </button>
+          </div>
+        </div>
+        <GraphVisualization
+          entities={filteredEntities}
+          onSelectNode={(node) => {
+            const entity = entities.find(
+              (e) => (e.id || e.name) === (node.id || node.label)
+            )
+            if (entity) setSelectedEntity(entity)
+          }}
+        />
       </div>
 
       {/* Search */}
@@ -173,7 +141,7 @@ export default function Graphs() {
               <div
                 key={entity.id || index}
                 className={`card p-4 cursor-pointer transition-all hover:shadow-md ${
-                  selectedEntity?.id === entity.id
+                  selectedEntity?.id === entity.id || selectedEntity?.name === entity.name
                     ? 'ring-2 ring-primary-500 dark:ring-primary-400'
                     : ''
                 }`}
@@ -288,6 +256,7 @@ export default function Graphs() {
               <div className="text-center py-8 text-gray-500 dark:text-gray-400">
                 <Network className="w-10 h-10 mx-auto mb-3 opacity-50" />
                 <p className="text-sm">Select an entity to view details</p>
+                <p className="text-xs mt-1 opacity-70">Or click a node in the graph above</p>
               </div>
             )}
           </div>
@@ -295,4 +264,111 @@ export default function Graphs() {
       </div>
     </div>
   )
+}
+
+function getDemoEntities() {
+  return [
+    {
+      id: 'demo-1',
+      name: 'Blockchain',
+      type: 'Technology',
+      description: 'A decentralized, distributed ledger technology that records transactions across multiple computers.',
+      properties: { origin: '2008', creator: 'Satoshi Nakamoto', category: 'Distributed Systems' },
+      relationships: [
+        { type: 'enables', target: 'Cryptocurrency' },
+        { type: 'uses', target: 'Consensus Mechanisms' },
+        { type: 'powers', target: 'Smart Contracts' },
+      ],
+    },
+    {
+      id: 'demo-2',
+      name: 'Cryptocurrency',
+      type: 'Financial Instrument',
+      description: 'Digital or virtual currency that uses cryptography for security and operates on blockchain networks.',
+      properties: { market_cap: '$2.5T', top_coins: 'Bitcoin, Ethereum', volatility: 'High' },
+      relationships: [
+        { type: 'built_on', target: 'Blockchain' },
+        { type: 'regulated_by', target: 'SEC' },
+        { type: 'traded_on', target: 'Coinbase' },
+      ],
+    },
+    {
+      id: 'demo-3',
+      name: 'Smart Contracts',
+      type: 'Software',
+      description: 'Self-executing contracts with the terms of the agreement directly written into code.',
+      properties: { platforms: 'Ethereum, Solana', language: 'Solidity', use_cases: 'DeFi, NFTs' },
+      relationships: [
+        { type: 'runs_on', target: 'Blockchain' },
+        { type: 'powers', target: 'DeFi' },
+        { type: 'enables', target: 'NFTs' },
+      ],
+    },
+    {
+      id: 'demo-4',
+      name: 'Consensus Mechanisms',
+      type: 'Algorithm',
+      description: 'Protocols that ensure all nodes in a blockchain network agree on the current state of the ledger.',
+      properties: { types: 'PoW, PoS, DPoS', energy_usage: 'Variable', security: 'High' },
+      relationships: [
+        { type: 'secures', target: 'Blockchain' },
+        { type: 'validates', target: 'Cryptocurrency' },
+      ],
+    },
+    {
+      id: 'demo-5',
+      name: 'DeFi',
+      type: 'Ecosystem',
+      description: 'Decentralized Finance — financial services built on blockchain without traditional intermediaries.',
+      properties: { tvl: '$100B+', protocols: 'Uniswap, Aave', risk: 'Smart contract risk' },
+      relationships: [
+        { type: 'uses', target: 'Smart Contracts' },
+        { type: 'disrupts', target: 'Traditional Finance' },
+        { type: 'built_on', target: 'Ethereum' },
+      ],
+    },
+    {
+      id: 'demo-6',
+      name: 'NFTs',
+      type: 'Technology',
+      description: 'Non-Fungible Tokens — unique digital assets verified using blockchain technology.',
+      properties: { market: '$15B', standard: 'ERC-721', use_cases: 'Art, Gaming, Music' },
+      relationships: [
+        { type: 'built_on', target: 'Blockchain' },
+        { type: 'powered_by', target: 'Smart Contracts' },
+      ],
+    },
+    {
+      id: 'demo-7',
+      name: 'Ethereum',
+      type: 'Technology',
+      description: 'A decentralized, open-source blockchain with smart contract functionality.',
+      properties: { launched: '2015', founder: 'Vitalik Buterin', consensus: 'PoS' },
+      relationships: [
+        { type: 'is_a', target: 'Blockchain' },
+        { type: 'supports', target: 'Smart Contracts' },
+        { type: 'hosts', target: 'DeFi' },
+      ],
+    },
+    {
+      id: 'demo-8',
+      name: 'SEC',
+      type: 'Organization',
+      description: 'U.S. Securities and Exchange Commission — regulates securities markets.',
+      properties: { country: 'USA', formed: '1934', focus: 'Securities regulation' },
+      relationships: [
+        { type: 'regulates', target: 'Cryptocurrency' },
+      ],
+    },
+    {
+      id: 'demo-9',
+      name: 'Coinbase',
+      type: 'Organization',
+      description: 'A secure online platform for buying, selling, transferring, and storing cryptocurrency.',
+      properties: { founded: '2012', users: '100M+', hq: 'USA' },
+      relationships: [
+        { type: 'lists', target: 'Cryptocurrency' },
+      ],
+    },
+  ]
 }

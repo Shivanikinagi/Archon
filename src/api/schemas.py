@@ -120,6 +120,8 @@ class ResearchReportResponse(BaseModel):
     format: str = "markdown"
     citations: List[dict] = Field(default_factory=list)
     sources: List[dict] = Field(default_factory=list)
+    workflow_trace: Optional[List[dict]] = None
+    reasoning_path: Optional[str] = None
     generated_at: datetime
     word_count: int
 
