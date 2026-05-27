@@ -12,6 +12,17 @@ import {
   Newspaper,
   FileText,
   Download,
+  BrainCircuit,
+  Database,
+  Microscope,
+  Network,
+  ShieldCheck,
+  Quote,
+  FileCheck,
+  Sparkles,
+  ChevronRight,
+  ExternalLink,
+  GitBranch,
 } from 'lucide-react'
 
 const sourceOptions = [
@@ -25,6 +36,331 @@ const depthOptions = [
   { value: 'moderate', label: 'Standard', description: 'Balanced depth (~15 sec)' },
   { value: 'deep', label: 'Deep', description: 'Comprehensive (~15 sec)' },
 ]
+
+// Workflow pipeline steps with icons
+const WORKFLOW_STEPS = [
+  { key: 'planning', label: 'Planning Research', icon: BrainCircuit },
+  { key: 'searching', label: 'Searching Sources', icon: Search },
+  { key: 'extracting', label: 'Extracting Entities', icon: Microscope },
+  { key: 'graph', label: 'Building Knowledge Graph', icon: Network },
+  { key: 'analyzing', label: 'Analyzing Sources', icon: Database },
+  { key: 'synthesizing', label: 'Synthesizing Report', icon: Sparkles },
+  { key: 'factcheck', label: 'Fact Checking', icon: ShieldCheck },
+  { key: 'citations', label: 'Generating Citations', icon: Quote },
+  { key: 'finalizing', label: 'Finalizing Report', icon: FileCheck },
+]
+
+function WorkflowPipeline({ currentStep, progress }) {
+  // Map step strings to indices
+  const stepIndex = WORKFLOW_STEPS.findIndex((s) =>
+    currentStep?.toLowerCase().includes(s.key) ||
+    (s.key === 'synthesizing' && currentStep?.toLowerCase().includes('synthes')) ||
+    (s.key === 'synthesizing' && currentStep?.toLowerCase().includes('ai is')) ||
+    (s.key === 'planning' && currentStep?.toLowerCase().includes('initial')) ||
+    (s.key === 'planning' && currentStep?.toLowerCase().includes('planning')) ||
+    (s.key === 'searching' && currentStep?.toLowerCase().includes('search')) ||
+    (s.key === 'extracting' && currentStep?.toLowerCase().includes('extract')) ||
+    (s.key === 'graph' && currentStep?.toLowerCase().includes('graph')) ||
+    (s.key === 'analyzing' && currentStep?.toLowerCase().includes('analyz')) ||
+    (s.key === 'analyzing' && currentStep?.toLowerCase().includes('ranking')) ||
+    (s.key === 'factcheck' && currentStep?.toLowerCase().includes('fact')) ||
+    (s.key === 'citations' && currentStep?.toLowerCase().includes('citation')) ||
+    (s.key === 'finalizing' && currentStep?.toLowerCase().includes('final')) ||
+    (s.key === 'finalizing' && currentStep?.toLowerCase().includes('reasoning')) ||
+    (s.key === 'finalizing' && currentStep?.toLowerCase().includes('complete'))
+  )
+
+  const activeIndex = stepIndex >= 0 ? stepIndex : Math.floor(progress * WORKFLOW_STEPS.length)
+
+  return (
+    <div className="space-y-3">
+      <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+        Research Pipeline
+      </h4>
+      <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 gap-2">
+        {WORKFLOW_STEPS.map((step, idx) => {
+          const Icon = step.icon
+          const isDone = idx < activeIndex
+          const isActive = idx === activeIndex
+          const isPending = idx > activeIndex
+
+          return (
+            <div
+              key={step.key}
+              className={`flex flex-col items-center text-center p-2 rounded-lg transition-all duration-500 ${
+                isDone
+                  ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
+                  : isActive
+                    ? 'bg-primary-50 dark:bg-primary-900/20 border border-primary-300 dark:border-primary-700 ring-2 ring-primary-200 dark:ring-primary-800 animate-pulse'
+                    : 'bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 opacity-50'
+              }`}
+            >
+              <div
+                className={`p-1.5 rounded-full mb-1 ${
+                  isDone
+                    ? 'bg-green-100 dark:bg-green-800 text-green-600 dark:text-green-400'
+                    : isActive
+                      ? 'bg-primary-100 dark:bg-primary-800 text-primary-600 dark:text-primary-400'
+                      : 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500'
+                }`}
+              >
+                {isDone ? (
+                  <CheckCircle className="w-4 h-4" />
+                ) : (
+                  <Icon className="w-4 h-4" />
+                )}
+              </div>
+              <span
+                className={`text-[10px] font-medium leading-tight ${
+                  isDone
+                    ? 'text-green-700 dark:text-green-400'
+                    : isActive
+                      ? 'text-primary-700 dark:text-primary-400'
+                      : 'text-gray-500 dark:text-gray-500'
+                }`}
+              >
+                {step.label}
+              </span>
+              {isActive && (
+                <Loader2 className="w-3 h-3 mt-1 animate-spin text-primary-500" />
+              )}
+            </div>
+          )
+        })}
+      </div>
+      <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+        <GitBranch className="w-3 h-3" />
+        <span>Current: {currentStep || 'Processing...'}</span>
+      </div>
+    </div>
+  )
+}
+
+function ReportContent({ content, sources }) {
+  // Simple markdown-like rendering with citation linkification
+  const lines = content.split('\n')
+  const rendered = []
+  let inCode = false
+  let inTable = false
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+
+    // Code blocks
+    if (line.trim().startsWith('```')) {
+      inCode = !inCode
+      rendered.push(
+        <pre
+          key={i}
+          className="bg-gray-900 text-gray-100 p-3 rounded-lg text-xs overflow-x-auto my-2 font-mono"
+        >
+          {line.replace(/```/g, '')}
+        </pre>
+      )
+      continue
+    }
+    if (inCode) {
+      rendered.push(
+        <pre
+          key={i}
+          className="bg-gray-900 text-gray-100 px-3 text-xs overflow-x-auto font-mono"
+        >
+          {line}
+        </pre>
+      )
+      continue
+    }
+
+    // Tables
+    if (line.trim().startsWith('|')) {
+      if (!inTable) {
+        inTable = true
+        rendered.push(
+          <div key={i} className="overflow-x-auto my-3">
+            <table className="min-w-full text-xs border-collapse">
+              <tbody>
+                <tr className="bg-gray-100 dark:bg-gray-800">
+                  {line
+                    .split('|')
+                    .filter((c) => c.trim())
+                    .map((cell, ci) => (
+                      <th
+                        key={ci}
+                        className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-left font-semibold text-gray-700 dark:text-gray-300"
+                      >
+                        {cell.trim()}
+                      </th>
+                    ))}
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )
+      } else if (!line.trim().match(/^\|[\s\-]+\|/)) {
+        // Data row
+        const prev = rendered[rendered.length - 1]
+        if (prev && prev.props.children?.props?.children?.props?.children) {
+          // Append to existing table - this is a simplified approach
+          rendered.push(
+            <div key={i} className="overflow-x-auto">
+              <table className="min-w-full text-xs border-collapse">
+                <tbody>
+                  <tr className="bg-white dark:bg-gray-900">
+                    {line
+                      .split('|')
+                      .filter((c) => c.trim())
+                      .map((cell, ci) => (
+                        <td
+                          key={ci}
+                          className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-gray-700 dark:text-gray-300"
+                        >
+                          {cell.trim()}
+                        </td>
+                      ))}
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          )
+        }
+      }
+      continue
+    } else {
+      inTable = false
+    }
+
+    // Headers
+    if (line.startsWith('# ')) {
+      rendered.push(
+        <h1 key={i} className="text-xl font-bold text-gray-900 dark:text-white mt-6 mb-3">
+          {line.replace('# ', '')}
+        </h1>
+      )
+      continue
+    }
+    if (line.startsWith('## ')) {
+      rendered.push(
+        <h2 key={i} className="text-lg font-bold text-gray-900 dark:text-white mt-5 mb-2">
+          {line.replace('## ', '')}
+        </h2>
+      )
+      continue
+    }
+    if (line.startsWith('### ')) {
+      rendered.push(
+        <h3 key={i} className="text-base font-semibold text-gray-800 dark:text-gray-200 mt-4 mb-2">
+          {line.replace('### ', '')}
+        </h3>
+      )
+      continue
+    }
+
+    // Bold
+    let processed = line
+    processed = processed.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    processed = processed.replace(/\*(.*?)\*/g, '<em>$1</em>')
+
+    // Citations [1], [2] etc. → links
+    if (sources && sources.length > 0) {
+      processed = processed.replace(/\[(\d+)\]/g, (match, num) => {
+        const src = sources.find((s) => s.index === parseInt(num) || s.index === num)
+        if (src && src.url) {
+          return `<a href="${src.url}" target="_blank" rel="noopener" class="inline-flex items-center gap-0.5 px-1 py-0.5 rounded bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 text-[10px] font-bold hover:underline">[${num}]<svg class="w-2 h-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg></a>`
+        }
+        return match
+      })
+    }
+
+    // Empty line
+    if (!line.trim()) {
+      rendered.push(<div key={i} className="h-2" />)
+      continue
+    }
+
+    // Horizontal rule
+    if (line.trim() === '---') {
+      rendered.push(<hr key={i} className="my-4 border-gray-200 dark:border-gray-700" />)
+      continue
+    }
+
+    // List items
+    if (line.trim().startsWith('- ')) {
+      rendered.push(
+        <li key={i} className="ml-4 text-sm text-gray-700 dark:text-gray-300 leading-relaxed list-disc">
+          <span dangerouslySetInnerHTML={{ __html: line.replace('- ', '') }} />
+        </li>
+      )
+      continue
+    }
+
+    // Numbered list
+    const numMatch = line.match(/^(\d+)\.\s+(.*)/)
+    if (numMatch) {
+      rendered.push(
+        <div key={i} className="ml-4 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+          <span className="font-semibold text-primary-600 dark:text-primary-400">{numMatch[1]}.</span>{' '}
+          <span dangerouslySetInnerHTML={{ __html: numMatch[2] }} />
+        </div>
+      )
+      continue
+    }
+
+    // Default paragraph
+    rendered.push(
+      <p
+        key={i}
+        className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed"
+        dangerouslySetInnerHTML={{ __html: processed }}
+      />
+    )
+  }
+
+  return <div className="space-y-1">{rendered}</div>
+}
+
+function SourcesPanel({ sources }) {
+  if (!sources || sources.length === 0) return null
+
+  return (
+    <div className="card mt-4">
+      <h4 className="font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+        <Database className="w-4 h-4 text-primary-600" />
+        Sources & References
+      </h4>
+      <div className="space-y-2 max-h-64 overflow-y-auto">
+        {sources.map((src) => (
+          <a
+            key={src.index}
+            href={src.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-start gap-2 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors group"
+          >
+            <span className="flex-shrink-0 inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 text-[10px] font-bold">
+              {src.index}
+            </span>
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-gray-900 dark:text-white truncate group-hover:text-primary-600 dark:group-hover:text-primary-400">
+                {src.title}
+              </p>
+              <p className="text-[10px] text-gray-500 dark:text-gray-400 truncate">{src.url}</p>
+              <span
+                className={`inline-block mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                  src.source_type === 'academic'
+                    ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300'
+                    : 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300'
+                }`}
+              >
+                {src.source_type}
+              </span>
+            </div>
+            <ExternalLink className="w-3 h-3 text-gray-400 flex-shrink-0 mt-1 opacity-0 group-hover:opacity-100 transition-opacity" />
+          </a>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 export default function Research() {
   const {
@@ -42,6 +378,7 @@ export default function Research() {
   const [sources, setSources] = useState(['web'])
   const [report, setReport] = useState(null)
   const [error, setError] = useState('')
+  const [currentStep, setCurrentStep] = useState('')
   const intervalRef = useRef(null)
 
   const toggleSource = (sourceId) => {
@@ -60,7 +397,8 @@ export default function Research() {
     setReport(null)
     setError('')
     setResearchStatus('running')
-    setResearchProgress(10)
+    setResearchProgress(0)
+    setCurrentStep('Initializing...')
 
     try {
       const response = await startResearch({
@@ -74,14 +412,12 @@ export default function Research() {
       pollStatus(sessionId)
     } catch (err) {
       setResearchStatus('failed')
-      // Handle different error formats
       let errorMessage = 'Failed to start research'
       if (err.response?.data?.detail) {
         if (typeof err.response.data.detail === 'string') {
           errorMessage = err.response.data.detail
         } else if (Array.isArray(err.response.data.detail)) {
-          // Validation errors from FastAPI
-          errorMessage = err.response.data.detail.map(e => `${e.loc.join('.')}: ${e.msg}`).join(', ')
+          errorMessage = err.response.data.detail.map((e) => `${e.loc.join('.')}: ${e.msg}`).join(', ')
         } else {
           errorMessage = JSON.stringify(err.response.data.detail)
         }
@@ -99,9 +435,9 @@ export default function Research() {
     intervalRef.current = setInterval(async () => {
       try {
         const status = await getResearchStatus(sessionId)
-        // Backend sends progress as 0.0-1.0, convert to 0-100 for display
         const progressPercent = Math.round((status.progress || 0) * 100)
         setResearchProgress(progressPercent)
+        setCurrentStep(status.current_step || '')
 
         if (status.status === 'completed') {
           setResearchStatus('completed')
@@ -115,7 +451,6 @@ export default function Research() {
         }
       } catch (err) {
         console.error('Poll error:', err)
-        // If session not found (404) or server unreachable, stop polling and show error
         if (err.response?.status === 404) {
           setResearchStatus('failed')
           setError('Research session not found. The server may have restarted. Please try again.')
@@ -126,7 +461,7 @@ export default function Research() {
           clearInterval(intervalRef.current)
         }
       }
-    }, 3000)
+    }, 2000)
   }
 
   const fetchReport = async (sessionId) => {
@@ -160,7 +495,7 @@ export default function Research() {
   const isRunning = researchStatus === 'running'
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="max-w-5xl mx-auto space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Research</h1>
         <p className="mt-1 text-gray-600 dark:text-gray-400">
@@ -258,26 +593,30 @@ export default function Research() {
         </form>
       </div>
 
-      {/* Progress */}
+      {/* Progress + Workflow */}
       {isRunning && (
-        <div className="card">
-          <div className="flex items-center justify-between mb-3">
+        <div className="card space-y-4">
+          <div className="flex items-center justify-between mb-1">
             <h3 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
               <Loader2 className="w-4 h-4 animate-spin text-primary-600 dark:text-primary-400" />
               Research in progress
             </h3>
-            <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+            <span className="text-sm font-medium text-primary-600 dark:text-primary-400">
               {researchProgress}%
             </span>
           </div>
-          <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
+          <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
             <div
-              className="bg-primary-600 dark:bg-primary-500 h-2.5 rounded-full transition-all duration-500"
+              className="bg-gradient-to-r from-primary-500 to-primary-600 dark:from-primary-400 dark:to-primary-500 h-2 rounded-full transition-all duration-700"
               style={{ width: `${researchProgress}%` }}
             />
           </div>
-          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-            Query: {currentResearch?.query}
+
+          {/* Workflow Pipeline */}
+          <WorkflowPipeline currentStep={currentStep} progress={researchProgress / 100} />
+
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            Query: <span className="font-medium">{currentResearch?.query}</span>
           </p>
         </div>
       )}
@@ -295,30 +634,42 @@ export default function Research() {
 
       {/* Report */}
       {report && (
-        <div className="card">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-              <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
-              Research Report
-            </h3>
-            <button onClick={handleExport} className="btn-secondary text-sm">
-              <Download className="w-4 h-4 mr-2" />
-              Export
-            </button>
-          </div>
-          <div className="prose dark:prose-invert max-w-none">
-            {report.content || report.report ? (
-              <div className="whitespace-pre-wrap text-gray-700 dark:text-gray-300 text-sm leading-relaxed">
-                {report.content || report.report}
+        <div className="space-y-4">
+          <div className="card">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <h3 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                  <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
+                  Research Report
+                </h3>
+                <span className="text-xs px-2 py-1 rounded-full bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 font-medium">
+                  {report.word_count?.toLocaleString() || '?'} words
+                </span>
+                <span className="text-xs px-2 py-1 rounded-full bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-400 font-medium">
+                  {report.sources?.length || 0} sources
+                </span>
               </div>
-            ) : (
-              <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                <pre className="text-xs text-gray-600 dark:text-gray-400 overflow-auto">
-                  {JSON.stringify(report, null, 2)}
-                </pre>
-              </div>
-            )}
+              <button onClick={handleExport} className="btn-secondary text-sm">
+                <Download className="w-4 h-4 mr-2" />
+                Export
+              </button>
+            </div>
+
+            <div className="prose dark:prose-invert max-w-none">
+              {report.content || report.report ? (
+                <ReportContent content={report.content || report.report} sources={report.sources} />
+              ) : (
+                <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                  <pre className="text-xs text-gray-600 dark:text-gray-400 overflow-auto">
+                    {JSON.stringify(report, null, 2)}
+                  </pre>
+                </div>
+              )}
+            </div>
           </div>
+
+          {/* Sources Panel */}
+          <SourcesPanel sources={report.sources} />
         </div>
       )}
     </div>
