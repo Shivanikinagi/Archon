@@ -122,6 +122,7 @@ class ResearchReportResponse(BaseModel):
     sources: List[dict] = Field(default_factory=list)
     workflow_trace: Optional[List[dict]] = None
     reasoning_path: Optional[str] = None
+    confidence_scores: Optional[dict] = None
     generated_at: datetime
     word_count: int
 

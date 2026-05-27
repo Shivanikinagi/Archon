@@ -14,7 +14,8 @@
     "react-router-dom": "^6.26.2",
     "axios": "^1.7.7",
     "zustand": "^5.0.0-rc.2",
-    "lucide-react": "^0.453.0"
+    "lucide-react": "^0.453.0",
+    "@xyflow/react": "^12.0.0"
   },
   "devDependencies": {
     "@types/react": "^18.3.10",

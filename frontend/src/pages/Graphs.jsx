@@ -1,7 +1,18 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
+import {
+  ReactFlow,
+  Background,
+  Controls,
+  MiniMap,
+  useNodesState,
+  useEdgesState,
+  Panel,
+  Handle,
+  Position,
+} from '@xyflow/react'
+import '@xyflow/react/dist/style.css'
 import { useStore } from '../stores/useStore.js'
 import { listEntities } from '../services/api.js'
-import GraphVisualization from '../components/GraphVisualization.jsx'
 import {
   Network,
   Search,
@@ -11,14 +22,161 @@ import {
   ChevronRight,
   Hash,
   Info,
+  ZoomIn,
+  ZoomOut,
+  Maximize2,
+  GitBranch,
 } from 'lucide-react'
+
+// --- Custom Node Component ---
+function EntityNode({ data, selected }) {
+  const colors = {
+    Technology: { bg: '#6366f1', border: '#4f46e5', light: '#e0e7ff' },
+    'Financial Instrument': { bg: '#10b981', border: '#059669', light: '#d1fae5' },
+    Software: { bg: '#f59e0b', border: '#d97706', light: '#fef3c7' },
+    Algorithm: { bg: '#ec4899', border: '#db2777', light: '#fce7f3' },
+    Ecosystem: { bg: '#8b5cf6', border: '#7c3aed', light: '#ede9fe' },
+    Organization: { bg: '#06b6d4', border: '#0891b2', light: '#cffafe' },
+    Person: { bg: '#f97316', border: '#ea580c', light: '#ffedd5' },
+    default: { bg: '#6b7280', border: '#4b5563', light: '#f3f4f6' },
+  }
+  const c = colors[data.type] || colors.default
+
+  return (
+    <div
+      className={`relative px-3 py-2 rounded-lg border-2 shadow-sm transition-all duration-200 ${
+        selected ? 'ring-2 ring-offset-2 ring-primary-500 scale-105' : ''
+      }`}
+      style={{
+        backgroundColor: c.light,
+        borderColor: c.border,
+        minWidth: 140,
+      }}
+    >
+      <Handle type="target" position={Position.Top} style={{ background: c.bg, width: 8, height: 8 }} />
+      <div className="flex items-center gap-2">
+        <span
+          className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+          style={{ backgroundColor: c.bg }}
+        />
+        <span className="text-xs font-bold text-gray-900 dark:text-gray-900 truncate">
+          {data.label}
+        </span>
+      </div>
+      <div className="text-[10px] text-gray-500 mt-0.5 truncate">{data.type}</div>
+      <Handle type="source" position={Position.Bottom} style={{ background: c.bg, width: 8, height: 8 }} />
+    </div>
+  )
+}
+
+const nodeTypes = { entity: EntityNode }
+
+// --- Build React Flow graph from entities ---
+function buildFlowGraph(entities) {
+  if (!entities || entities.length === 0) return { nodes: [], edges: [] }
+
+  const nodes = []
+  const edges = []
+  const nodeMap = new Map()
+  const positions = [
+    { x: 0, y: 0 },
+    { x: 250, y: -80 },
+    { x: 250, y: 80 },
+    { x: 500, y: -120 },
+    { x: 500, y: 0 },
+    { x: 500, y: 120 },
+    { x: -250, y: -60 },
+    { x: -250, y: 60 },
+    { x: 0, y: -180 },
+    { x: 0, y: 180 },
+    { x: 750, y: -60 },
+    { x: 750, y: 60 },
+  ]
+
+  entities.forEach((entity, index) => {
+    const id = entity.id || `node-${index}`
+    const pos = positions[index % positions.length]
+    // Add some randomness to prevent perfect overlap
+    const jitterX = (Math.random() - 0.5) * 60
+    const jitterY = (Math.random() - 0.5) * 60
+
+    nodes.push({
+      id,
+      type: 'entity',
+      position: { x: pos.x + jitterX, y: pos.y + jitterY },
+      data: {
+        label: entity.name || entity.label || 'Unknown',
+        type: entity.type || 'Entity',
+        description: entity.description || '',
+        properties: entity.properties || {},
+        relationships: entity.relationships || [],
+      },
+    })
+    nodeMap.set(entity.name || entity.label, id)
+    nodeMap.set(id, id)
+  })
+
+  // Create edges from relationships
+  entities.forEach((entity) => {
+    const sourceId = nodeMap.get(entity.id) || nodeMap.get(entity.name)
+    if (!sourceId) return
+
+    ;(entity.relationships || []).forEach((rel, idx) => {
+      const targetName = rel.target || rel.name
+      let targetId = nodeMap.get(targetName)
+
+      if (!targetId) {
+        const newId = `implicit-${targetName.replace(/\s+/g, '-').toLowerCase()}`
+        if (!nodeMap.has(newId)) {
+          const angle = Math.random() * 2 * Math.PI
+          const radius = 350 + Math.random() * 150
+          nodes.push({
+            id: newId,
+            type: 'entity',
+            position: { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius },
+            data: {
+              label: targetName,
+              type: 'Related',
+              description: '',
+              properties: {},
+              relationships: [],
+            },
+          })
+          nodeMap.set(targetName, newId)
+          nodeMap.set(newId, newId)
+        }
+        targetId = newId
+      }
+
+      if (targetId && targetId !== sourceId) {
+        edges.push({
+          id: `e-${sourceId}-${targetId}-${idx}`,
+          source: sourceId,
+          target: targetId,
+          label: rel.type || 'relates to',
+          type: 'smoothstep',
+          animated: true,
+          style: { stroke: '#94a3b8', strokeWidth: 1.5 },
+          labelStyle: { fontSize: 10, fill: '#64748b' },
+          labelBgStyle: { fill: '#f8fafc', fillOpacity: 0.9 },
+          labelBgPadding: [4, 4],
+          labelBgBorderRadius: 4,
+        })
+      }
+    })
+  })
+
+  return { nodes, edges }
+}
 
 export default function Graphs() {
   const { entities, setEntities } = useStore()
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedEntity, setSelectedEntity] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
-  const [viewMode, setViewMode] = useState('split') // 'split' | 'graph'
+  const [nodes, setNodes, onNodesChange] = useNodesState([])
+  const [edges, setEdges, onEdgesChange] = useEdgesState([])
+  const [reactFlowInstance, setReactFlowInstance] = useState(null)
 
   useEffect(() => {
     const fetchEntities = async () => {
@@ -40,14 +198,42 @@ export default function Graphs() {
     fetchEntities()
   }, [setEntities])
 
-  const filteredEntities = (entities || []).filter((entity) => {
-    const term = searchTerm.toLowerCase()
-    return (
-      (entity.name || '').toLowerCase().includes(term) ||
-      (entity.type || '').toLowerCase().includes(term) ||
-      (entity.description || '').toLowerCase().includes(term)
+  useEffect(() => {
+    const filtered = (entities || []).filter((entity) => {
+      const term = searchTerm.toLowerCase()
+      return (
+        (entity.name || '').toLowerCase().includes(term) ||
+        (entity.type || '').toLowerCase().includes(term) ||
+        (entity.description || '').toLowerCase().includes(term)
+      )
+    })
+    const { nodes: flowNodes, edges: flowEdges } = buildFlowGraph(filtered)
+    setNodes(flowNodes)
+    setEdges(flowEdges)
+  }, [entities, searchTerm, setNodes, setEdges])
+
+  const onNodeClick = useCallback((_, node) => {
+    const entity = (entities || []).find(
+      (e) => (e.id || e.name) === (node.id || node.data.label)
     )
-  })
+    if (entity) {
+      setSelectedEntity(entity)
+    } else {
+      // Implicit node
+      setSelectedEntity({
+        id: node.id,
+        name: node.data.label,
+        type: node.data.type,
+        description: node.data.description,
+        properties: node.data.properties,
+        relationships: node.data.relationships,
+      })
+    }
+  }, [entities])
+
+  const onFitView = useCallback(() => {
+    reactFlowInstance?.fitView({ padding: 0.2, duration: 800 })
+  }, [reactFlowInstance])
 
   if (isLoading) {
     return (
@@ -66,50 +252,74 @@ export default function Graphs() {
         </p>
       </div>
 
-      {/* Graph Visualization */}
-      <div className="card p-0 overflow-hidden">
-        <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+      {/* React Flow Graph */}
+      <div className="card p-0 overflow-hidden" style={{ height: 520 }}>
+        <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between bg-gray-50 dark:bg-gray-800/50">
           <div className="flex items-center gap-2">
             <Network className="w-4 h-4 text-primary-600 dark:text-primary-400" />
             <h3 className="font-semibold text-gray-900 dark:text-white text-sm">
               Graph Visualization
             </h3>
             <span className="text-xs text-gray-500 dark:text-gray-400">
-              {entities?.length || 0} nodes
+              {nodes.length} nodes · {edges.length} edges
             </span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
             <button
-              onClick={() => setViewMode('split')}
-              className={`text-xs px-2 py-1 rounded-md transition-colors ${
-                viewMode === 'split'
-                  ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
-                  : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
-              }`}
+              onClick={onFitView}
+              className="p-1.5 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+              title="Fit to view"
             >
-              Split View
-            </button>
-            <button
-              onClick={() => setViewMode('graph')}
-              className={`text-xs px-2 py-1 rounded-md transition-colors ${
-                viewMode === 'graph'
-                  ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
-                  : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
-              }`}
-            >
-              Full Graph
+              <Maximize2 className="w-3.5 h-3.5 text-gray-600 dark:text-gray-400" />
             </button>
           </div>
         </div>
-        <GraphVisualization
-          entities={filteredEntities}
-          onSelectNode={(node) => {
-            const entity = entities.find(
-              (e) => (e.id || e.name) === (node.id || node.label)
-            )
-            if (entity) setSelectedEntity(entity)
-          }}
-        />
+        <div style={{ height: 'calc(100% - 41px)' }}>
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onNodeClick={onNodeClick}
+            onInit={setReactFlowInstance}
+            nodeTypes={nodeTypes}
+            fitView
+            attributionPosition="bottom-right"
+            minZoom={0.1}
+            maxZoom={2}
+          >
+            <Background color="#cbd5e1" gap={20} size={1} />
+            <Controls />
+            <MiniMap
+              nodeStrokeWidth={3}
+              zoomable
+              pannable
+              className="!bg-white dark:!bg-gray-900 !border-gray-200 dark:!border-gray-700"
+            />
+            <Panel position="top-left" className="m-2">
+              <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-lg p-2 shadow-sm border border-gray-200 dark:border-gray-700">
+                <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 mb-1 uppercase">
+                  Node Types
+                </p>
+                <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+                  {[
+                    ['Technology', '#6366f1'],
+                    ['Financial Instrument', '#10b981'],
+                    ['Software', '#f59e0b'],
+                    ['Algorithm', '#ec4899'],
+                    ['Ecosystem', '#8b5cf6'],
+                    ['Organization', '#06b6d4'],
+                  ].map(([type, color]) => (
+                    <div key={type} className="flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
+                      <span className="text-[10px] text-gray-600 dark:text-gray-400">{type}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </Panel>
+          </ReactFlow>
+        </div>
       </div>
 
       {/* Search */}
@@ -129,50 +339,59 @@ export default function Graphs() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Entity list */}
         <div className="lg:col-span-2 space-y-3">
-          {filteredEntities.length === 0 ? (
+          {(entities || []).length === 0 ? (
             <div className="card text-center py-12">
               <Network className="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600 mb-3" />
               <p className="text-gray-500 dark:text-gray-400">
-                {searchTerm ? 'No entities match your search' : 'No entities found in the graph'}
+                No entities found in the graph
               </p>
             </div>
           ) : (
-            filteredEntities.map((entity, index) => (
-              <div
-                key={entity.id || index}
-                className={`card p-4 cursor-pointer transition-all hover:shadow-md ${
-                  selectedEntity?.id === entity.id || selectedEntity?.name === entity.name
-                    ? 'ring-2 ring-primary-500 dark:ring-primary-400'
-                    : ''
-                }`}
-                onClick={() => setSelectedEntity(entity)}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-start gap-3 min-w-0">
-                    <div className="p-2 rounded-lg bg-primary-50 dark:bg-primary-900/20 flex-shrink-0">
-                      <Target className="w-5 h-5 text-primary-600 dark:text-primary-400" />
+            (entities || [])
+              .filter((entity) => {
+                const term = searchTerm.toLowerCase()
+                return (
+                  (entity.name || '').toLowerCase().includes(term) ||
+                  (entity.type || '').toLowerCase().includes(term) ||
+                  (entity.description || '').toLowerCase().includes(term)
+                )
+              })
+              .map((entity, index) => (
+                <div
+                  key={entity.id || index}
+                  className={`card p-4 cursor-pointer transition-all hover:shadow-md ${
+                    selectedEntity?.id === entity.id || selectedEntity?.name === entity.name
+                      ? 'ring-2 ring-primary-500 dark:ring-primary-400'
+                      : ''
+                  }`}
+                  onClick={() => setSelectedEntity(entity)}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-3 min-w-0">
+                      <div className="p-2 rounded-lg bg-primary-50 dark:bg-primary-900/20 flex-shrink-0">
+                        <Target className="w-5 h-5 text-primary-600 dark:text-primary-400" />
+                      </div>
+                      <div className="min-w-0">
+                        <h3 className="font-medium text-gray-900 dark:text-white">
+                          {entity.name || 'Unnamed Entity'}
+                        </h3>
+                        {entity.type && (
+                          <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-xs text-gray-600 dark:text-gray-400">
+                            <Hash className="w-3 h-3" />
+                            {entity.type}
+                          </span>
+                        )}
+                        {entity.description && (
+                          <p className="mt-2 text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
+                            {entity.description}
+                          </p>
+                        )}
+                      </div>
                     </div>
-                    <div className="min-w-0">
-                      <h3 className="font-medium text-gray-900 dark:text-white">
-                        {entity.name || 'Unnamed Entity'}
-                      </h3>
-                      {entity.type && (
-                        <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-xs text-gray-600 dark:text-gray-400">
-                          <Hash className="w-3 h-3" />
-                          {entity.type}
-                        </span>
-                      )}
-                      {entity.description && (
-                        <p className="mt-2 text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
-                          {entity.description}
-                        </p>
-                      )}
-                    </div>
+                    <ChevronRight className="w-5 h-5 text-gray-400 flex-shrink-0 mt-1" />
                   </div>
-                  <ChevronRight className="w-5 h-5 text-gray-400 flex-shrink-0 mt-1" />
                 </div>
-              </div>
-            ))
+              ))
           )}
         </div>
 
@@ -204,7 +423,7 @@ export default function Graphs() {
                   </div>
                 )}
 
-                {selectedEntity.properties && (
+                {selectedEntity.properties && Object.keys(selectedEntity.properties).length > 0 && (
                   <div>
                     <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                       Properties

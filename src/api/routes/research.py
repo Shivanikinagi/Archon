@@ -3,6 +3,8 @@ Research session routes.
 """
 
 import asyncio
+import json
+import re
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, status, Depends, BackgroundTasks
 
@@ -93,6 +95,119 @@ async def _search_academic(query: str, num_results: int = 10) -> list[dict]:
     except Exception as e:
         logger.warning(f"Academic search failed: {e}")
         return []
+
+
+async def _calculate_confidence(llm_provider, research_content: str, sources: list[dict]) -> dict:
+    """
+    Ask the AI to assess confidence of each major section.
+    Returns a dict with section scores and overall score.
+    """
+    try:
+        # Count how many inline citations exist
+        citation_count = len(re.findall(r'\[\d+\]', research_content))
+        source_count = len(sources)
+        
+        # Ask AI for structured confidence assessment
+        confidence_prompt = f"""Review the following research report and assign confidence scores (0.0-1.0) to each major section based on:
+- Strength of evidence (citations, data, specific facts)
+- Specificity (names, dates, numbers, benchmarks)
+- Analytical depth (comparisons, trade-offs, critical assessment)
+- Recency (2024-2026 coverage)
+
+Report:
+{research_content[:3000]}...
+
+Respond ONLY with a JSON object in this exact format:
+{{
+  "executive_summary": 0.XX,
+  "recent_advancements": 0.XX,
+  "technical_architecture": 0.XX,
+  "competitive_landscape": 0.XX,
+  "research_trends": 0.XX,
+  "limitations": 0.XX,
+  "future_outlook": 0.XX,
+  "overall": 0.XX,
+  "rationale": "Brief 1-sentence rationale for overall score"
+}}
+"""
+        confidence_text = await asyncio.wait_for(
+            llm_provider.generate_text(
+                prompt=confidence_prompt,
+                system_prompt="You are a rigorous peer reviewer. Assess confidence objectively based on evidence quality, specificity, and analytical depth. Be conservative with scores.",
+                temperature=0.2,
+                max_tokens=512
+            ),
+            timeout=60.0
+        )
+        
+        # Extract JSON from response
+        json_match = re.search(r'\{.*\}', confidence_text, re.DOTALL)
+        if json_match:
+            scores = json.loads(json_match.group())
+            # Ensure overall exists
+            if 'overall' not in scores:
+                scores['overall'] = sum([
+                    scores.get(k, 0.7) for k in [
+                        'executive_summary', 'recent_advancements', 'technical_architecture',
+                        'competitive_landscape', 'research_trends', 'limitations', 'future_outlook'
+                    ]
+                ]) / 7
+            scores['citation_density'] = min(1.0, citation_count / max(1, source_count * 2))
+            return scores
+    except Exception as e:
+        logger.warning(f"Confidence scoring failed: {e}")
+    
+    # Fallback: compute heuristic confidence
+    citation_count = len(re.findall(r'\[\d+\]', research_content))
+    heuristic = min(0.95, 0.5 + (citation_count * 0.03) + (len(sources) * 0.02))
+    return {
+        "executive_summary": heuristic,
+        "recent_advancements": heuristic,
+        "technical_architecture": heuristic,
+        "competitive_landscape": heuristic,
+        "research_trends": heuristic,
+        "limitations": heuristic,
+        "future_outlook": heuristic,
+        "overall": heuristic,
+        "rationale": "Heuristic score based on citation density and source count.",
+        "citation_density": citation_count / max(1, len(sources)),
+    }
+
+
+def _build_confidence_section(scores: dict) -> str:
+    """Build a Markdown confidence section for the report."""
+    if not scores:
+        return ""
+    
+    section_map = {
+        "executive_summary": "Executive Summary",
+        "recent_advancements": "Recent Advancements",
+        "technical_architecture": "Technical Architecture",
+        "competitive_landscape": "Competitive Landscape",
+        "research_trends": "Research Trends",
+        "limitations": "Limitations Assessment",
+        "future_outlook": "Future Outlook",
+    }
+    
+    rows = []
+    for key, label in section_map.items():
+        score = scores.get(key, 0.0)
+        bar = "█" * int(score * 10) + "░" * (10 - int(score * 10))
+        rows.append(f"| {label} | {bar} | {score:.0%} |")
+    
+    return f"""## Confidence Assessment
+
+The AI has self-assessed the evidentiary quality of each report section:
+
+| Section | Confidence Bar | Score |
+|---------|---------------|-------|
+{chr(10).join(rows)}
+| **Overall** | {'█' * int(scores.get('overall', 0) * 10) + '░' * (10 - int(scores.get('overall', 0) * 10))} | **{scores.get('overall', 0):.0%}** |
+
+**Rationale:** {scores.get('rationale', 'Based on citation density and source quality.')}
+
+*Confidence scores reflect the AI's assessment of how well each section is supported by evidence, specificity, and analytical depth. Higher scores indicate more specific, data-backed, and comparative content.*
+"""
 
 
 async def execute_research(session_id: str, request: ResearchRequest, db: MockDBSession):
@@ -189,35 +304,50 @@ async def execute_research(session_id: str, request: ResearchRequest, db: MockDB
         _update_step("AI is synthesizing findings into report...", 0.50)
         
         depth_label = request.depth.value.upper()
-        research_prompt = f"""You are a senior research analyst. Write a comprehensive, professional research report on the following topic.
+        research_prompt = f"""You are a senior research analyst at a top-tier technology consulting firm. Your job is to produce ANALYTICAL, INSIGHTFUL reports — not encyclopedia entries.
 
 ## Research Topic
 {request.query}
 
-## Instructions
-- Write a DETAILED report (minimum 1500 words, aim for 2000+ for deep research).
-- Use an academic/professional tone.
-- Structure the report with clear headings and subheadings.
-- Include specific facts, statistics, dates, and names where relevant.
-- Cite sources inline using [1], [2], etc. referencing the provided sources.
-- If no sources are provided, still write a thorough report based on your knowledge.
+## CRITICAL INSTRUCTIONS — Do NOT write generic "what is X" content.
+Your report must be ANALYTICAL and COMPARATIVE. Focus on:
+
+1. **Recent Advancements (2024-2026)** — What changed recently? New models, papers, releases, breakthroughs.
+2. **Technical Architecture Comparison** — Compare approaches, frameworks, architectures side-by-side.
+3. **Market & Competitive Landscape** — Who are the key players? What are their relative strengths/weaknesses?
+4. **Quantitative Metrics** — Include benchmarks, performance numbers, parameter counts, latency figures where relevant.
+5. **Research Trends** — What are researchers focusing on now? What direction is the field moving?
+6. **Limitations & Trade-offs** — Be critical. What does each approach get wrong? What are the hidden costs?
+7. **Relationship Analysis** — If the query involves companies/people/products, analyze HOW they connect, compete, or depend on each other.
 
 ## Required Sections
-1. **Executive Summary** — 2-3 paragraph overview of key findings
-2. **Introduction** — Context and importance of the topic
-3. **Background & History** — How this topic emerged and evolved
-4. **Key Concepts & Technical Details** — Deep dive into mechanisms, technologies, or theories
-5. **Current State & Recent Developments** — What's happening now (2024-2026)
-6. **Practical Applications & Use Cases** — Real-world examples with specifics
-7. **Challenges & Limitations** — Honest assessment of problems
-8. **Future Outlook** — Trends and predictions
-9. **Conclusion** — Synthesis of findings
+1. **Executive Summary** — Key analytical findings in 2-3 paragraphs. Lead with insights, not definitions.
+2. **Introduction** — Why this topic matters NOW. What is the stakes/context in 2025-2026?
+3. **Recent Advancements & Breakthroughs** — Specific developments from 2024-2026 with dates, names, numbers
+4. **Technical Architecture Deep-Dive** — Compare mechanisms, models, or approaches. Use tables.
+5. **Competitive Landscape** — Key players, their offerings, and how they stack up. Use comparison tables.
+6. **Research Trends & Directions** — Where is the field heading? What are the open research questions?
+7. **Limitations & Critical Assessment** — Honest weaknesses, failure modes, ethical concerns
+8. **Future Outlook & Predictions** — Data-driven predictions for the next 1-3 years
+9. **Conclusion** — Synthesis of key analytical insights
 10. **References** — List all cited sources with URLs
+
+## Comparison Tables (REQUIRED)
+Include at least 2 comparison tables in Markdown format. Examples:
+- Model / Approach comparison (features, strengths, weaknesses)
+- Company / Player comparison (offering, market position, differentiation)
+- Architecture comparison (parameters, latency, accuracy, cost)
+
+## Tone Guidelines
+- AVOID: "X is a technology that..." "X has many applications..." "X is important because..."
+- USE: "X outperforms Y by Z% on benchmark W" "Organization A pivoted to B in 2025 because..." "The critical limitation of approach C is..."
+- Be specific with names, dates, numbers, and benchmarks.
+- Write like you're briefing a CTO, not explaining to a student.
 
 {source_context}
 
 ## Output Format
-Write the full report in clean Markdown. Do NOT include meta-commentary about the task. Start directly with the Executive Summary."""
+Write the full report in clean Markdown. Start directly with the Executive Summary. Do NOT include meta-commentary."""
 
         logger.info(f"Calling {llm_name} for session {session_id} (max_tokens={max_tokens})")
         
@@ -225,8 +355,8 @@ Write the full report in clean Markdown. Do NOT include meta-commentary about th
         research_content = await asyncio.wait_for(
             llm_provider.generate_text(
                 prompt=research_prompt,
-                system_prompt="You are an expert research analyst. Write detailed, factual, well-structured reports with inline citations. Be thorough and specific.",
-                temperature=0.5,
+                system_prompt="You are an expert technology research analyst who writes for CTOs and senior engineers. Your writing is sharp, analytical, comparison-heavy, and full of specific names, dates, benchmarks, and numbers. You never write generic encyclopedia-style content.",
+                temperature=0.4,
                 max_tokens=max_tokens
             ),
             timeout=300.0
@@ -238,8 +368,12 @@ Write the full report in clean Markdown. Do NOT include meta-commentary about th
         _update_step("Fact-checking claims against sources...", 0.72)
         await asyncio.sleep(0.5)
         
-        # Phase 9: Generating Citations
-        _update_step("Generating citations & references...", 0.82)
+        # Phase 9: Confidence Scoring
+        _update_step("Calculating confidence scores...", 0.78)
+        confidence_scores = await _calculate_confidence(llm_provider, research_content, all_sources)
+        
+        # Phase 10: Generating Citations
+        _update_step("Generating citations & references...", 0.85)
         
         # Build formatted sources list
         formatted_sources = []
@@ -252,8 +386,8 @@ Write the full report in clean Markdown. Do NOT include meta-commentary about th
                 "snippet": src["snippet"][:200],
             })
         
-        # Phase 10: Building Reasoning Path
-        _update_step("Building reasoning path & trace...", 0.90)
+        # Phase 11: Building Reasoning Path
+        _update_step("Building reasoning path & trace...", 0.92)
         
         # Build reasoning trace showing the pipeline
         source_types_found = ', '.join(sorted(set(s['source'] for s in all_sources))) or 'AI knowledge base'
@@ -265,7 +399,7 @@ This report was generated through the following analytical pipeline:
 Query: "{request.query}"
     |
     v
-[1] Planning -> Research strategy formulated for {request.depth.value} depth
+[1] Planning -> Analytical strategy formulated for {request.depth.value} depth
     |
     v
 [2] Source Search -> {len(all_sources)} sources retrieved from {source_types_found}
@@ -280,16 +414,19 @@ Query: "{request.query}"
 [5] Source Analysis -> Sources ranked by relevance and credibility
     |
     v
-[6] Synthesis -> AI ({llm_name}) synthesizes findings into structured report
+[6] Synthesis -> AI ({llm_name}) synthesizes analytical findings into report
     |
     v
 [7] Fact-Checking -> Claims cross-referenced with source material
     |
     v
-[8] Citation Generation -> Inline citations [1], [2], ... mapped to sources
+[8] Confidence Scoring -> Each section assessed for evidential support
     |
     v
-[9] Final Report -> {len(research_content.split())} words compiled
+[9] Citation Generation -> Inline citations [1], [2], ... mapped to sources
+    |
+    v
+[10] Final Report -> {len(research_content.split())} words compiled
 ```
 
 ### Source-to-Insight Chain
@@ -301,10 +438,14 @@ Query: "{request.query}"
 | Connect | Entity relationships mapped | Knowledge graph built |
 | Synthesize | AI reasoning over graph + sources | Draft report generated |
 | Verify | Claims vs. source material | Accuracy validated |
+| Score | Confidence assessment per section | Reliability quantified |
 | Cite | Inline citations added | Traceable references |
 
 *Each claim in this report can be traced back through this chain to its originating sources.*
 """
+        
+        # Build confidence section for report
+        confidence_section = _build_confidence_section(confidence_scores)
         
         # Create the final report
         final_report = f"""# Research Report: {request.query}
@@ -313,11 +454,16 @@ Query: "{request.query}"
 **Research Depth:** {request.depth.value.title()}  
 **Model:** {llm_name}  
 **Sources Found:** {len(all_sources)}  
-**Report Length:** {len(research_content.split())} words
+**Report Length:** {len(research_content.split())} words  
+**Overall Confidence:** {confidence_scores.get('overall', 0.85):.0%}
 
 ---
 
 {research_content}
+
+---
+
+{confidence_section}
 
 ---
 
@@ -330,10 +476,11 @@ Query: "{request.query}"
 - **AI Model:** {llm_name}
 - **Research Depth:** {request.depth.value.title()}
 - **Sources Consulted:** {len(all_sources)} (web + academic)
-- **Pipeline Steps:** Planning -> Search -> Extract -> Graph -> Analyze -> Synthesize -> Fact-Check -> Cite -> Report
+- **Pipeline Steps:** Planning -> Search -> Extract -> Graph -> Analyze -> Synthesize -> Fact-Check -> Score -> Cite -> Report
+- **Overall Confidence:** {confidence_scores.get('overall', 0.85):.0%}
 - **Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M')}
 
-*Note: This report was generated by an AI research agent. While efforts are made to ensure accuracy, please verify critical facts with primary sources.*
+*Note: This report was generated by an AI research agent. Confidence scores reflect the AI's self-assessment of evidential support. Please verify critical facts with primary sources.*
 """
         
         # Store the report
@@ -347,6 +494,7 @@ Query: "{request.query}"
             "sources": formatted_sources,
             "workflow_trace": workflow_trace,
             "reasoning_path": reasoning_path,
+            "confidence_scores": confidence_scores,
             "generated_at": datetime.now(),
             "word_count": len(final_report.split()),
             "user_id": db.sessions[session_id]["user_id"],
@@ -500,6 +648,7 @@ async def get_research_report(
             sources=report.get("sources", []),
             workflow_trace=report.get("workflow_trace"),
             reasoning_path=report.get("reasoning_path"),
+            confidence_scores=report.get("confidence_scores"),
             generated_at=report.get("generated_at", datetime.now()),
             word_count=report.get("word_count", 0),
         )

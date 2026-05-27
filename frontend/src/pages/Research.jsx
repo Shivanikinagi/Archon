@@ -23,6 +23,10 @@ import {
   ChevronRight,
   ExternalLink,
   GitBranch,
+  Lightbulb,
+  TrendingUp,
+  BarChart3,
+  Shield,
 } from 'lucide-react'
 
 const sourceOptions = [
@@ -37,6 +41,34 @@ const depthOptions = [
   { value: 'deep', label: 'Deep', description: 'Comprehensive (~15 sec)' },
 ]
 
+const SUGGESTED_QUERIES = [
+  {
+    query: 'How are OpenAI, Microsoft, NVIDIA, and Anthropic connected in the generative AI ecosystem?',
+    icon: GitBranch,
+    label: 'Relationship Analysis',
+  },
+  {
+    query: 'Compare GPT-4o, Gemini 1.5, Claude 3.5, and Llama 3 on multimodal capabilities and benchmarks',
+    icon: BarChart3,
+    label: 'Model Comparison',
+  },
+  {
+    query: 'Recent advancements in multimodal AI models: architectures, limitations, and research trends in 2024-2025',
+    icon: TrendingUp,
+    label: 'Research Trends',
+  },
+  {
+    query: 'What are the key technical differences between transformer-based and diffusion-based generative models?',
+    icon: Lightbulb,
+    label: 'Technical Deep-Dive',
+  },
+  {
+    query: 'How does AI agent infrastructure connect LLMs, tool use, memory systems, and planning frameworks?',
+    icon: BrainCircuit,
+    label: 'System Architecture',
+  },
+]
+
 // Workflow pipeline steps with icons
 const WORKFLOW_STEPS = [
   { key: 'planning', label: 'Planning Research', icon: BrainCircuit },
@@ -49,6 +81,72 @@ const WORKFLOW_STEPS = [
   { key: 'citations', label: 'Generating Citations', icon: Quote },
   { key: 'finalizing', label: 'Finalizing Report', icon: FileCheck },
 ]
+
+function ConfidencePanel({ scores }) {
+  if (!scores) return null
+
+  const sectionMap = {
+    executive_summary: 'Executive Summary',
+    recent_advancements: 'Recent Advancements',
+    technical_architecture: 'Technical Architecture',
+    competitive_landscape: 'Competitive Landscape',
+    research_trends: 'Research Trends',
+    limitations: 'Limitations',
+    future_outlook: 'Future Outlook',
+  }
+
+  const getColor = (score) => {
+    if (score >= 0.85) return 'bg-green-500'
+    if (score >= 0.7) return 'bg-blue-500'
+    if (score >= 0.55) return 'bg-yellow-500'
+    return 'bg-red-500'
+  }
+
+  const getTextColor = (score) => {
+    if (score >= 0.85) return 'text-green-700 dark:text-green-400'
+    if (score >= 0.7) return 'text-blue-700 dark:text-blue-400'
+    if (score >= 0.55) return 'text-yellow-700 dark:text-yellow-400'
+    return 'text-red-700 dark:text-red-400'
+  }
+
+  return (
+    <div className="card mt-4">
+      <div className="flex items-center justify-between mb-3">
+        <h4 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2 text-sm">
+          <Shield className="w-4 h-4 text-primary-600" />
+          Confidence Assessment
+        </h4>
+        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${getColor(scores.overall || 0).replace('bg-', 'bg-').replace('500', '100')} dark:bg-opacity-20 ${getTextColor(scores.overall || 0)}`}>
+          Overall: {((scores.overall || 0) * 100).toFixed(0)}%
+        </span>
+      </div>
+      <div className="space-y-2">
+        {Object.entries(sectionMap).map(([key, label]) => {
+          const score = scores[key] || 0
+          return (
+            <div key={key} className="flex items-center gap-3">
+              <span className="text-xs text-gray-600 dark:text-gray-400 w-32 truncate">{label}</span>
+              <div className="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-1000 ${getColor(score)}`}
+                  style={{ width: `${score * 100}%` }}
+                />
+              </div>
+              <span className={`text-xs font-bold w-10 text-right ${getTextColor(score)}`}>
+                {(score * 100).toFixed(0)}%
+              </span>
+            </div>
+          )
+        })}
+      </div>
+      {scores.rationale && (
+        <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-2 italic">
+          {scores.rationale}
+        </p>
+      )}
+    </div>
+  )
+}
 
 function WorkflowPipeline({ currentStep, progress }) {
   // Map step strings to indices
@@ -519,6 +617,25 @@ export default function Research() {
                 disabled={isRunning}
               />
             </div>
+            {/* Suggested Queries */}
+            <div className="mt-2 flex flex-wrap gap-2">
+              {SUGGESTED_QUERIES.map((sq) => {
+                const Icon = sq.icon
+                return (
+                  <button
+                    key={sq.query}
+                    type="button"
+                    onClick={() => setQuery(sq.query)}
+                    disabled={isRunning}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-gray-100 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-700 text-[11px] text-gray-600 dark:text-gray-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 hover:border-primary-300 dark:hover:border-primary-700 hover:text-primary-700 dark:hover:text-primary-300 transition-colors"
+                    title={sq.query}
+                  >
+                    <Icon className="w-3 h-3" />
+                    <span className="truncate max-w-[200px]">{sq.label}</span>
+                  </button>
+                )
+              })}
+            </div>
           </div>
 
           {/* Depth selector */}
@@ -648,6 +765,19 @@ export default function Research() {
                 <span className="text-xs px-2 py-1 rounded-full bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-400 font-medium">
                   {report.sources?.length || 0} sources
                 </span>
+                {report.confidence_scores?.overall !== undefined && (
+                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                    report.confidence_scores.overall >= 0.85
+                      ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400'
+                      : report.confidence_scores.overall >= 0.7
+                        ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400'
+                        : report.confidence_scores.overall >= 0.55
+                          ? 'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-400'
+                          : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400'
+                  }`}>
+                    {(report.confidence_scores.overall * 100).toFixed(0)}% confidence
+                  </span>
+                )}
               </div>
               <button onClick={handleExport} className="btn-secondary text-sm">
                 <Download className="w-4 h-4 mr-2" />
@@ -670,6 +800,9 @@ export default function Research() {
 
           {/* Sources Panel */}
           <SourcesPanel sources={report.sources} />
+
+          {/* Confidence Scores */}
+          <ConfidencePanel scores={report.confidence_scores} />
         </div>
       )}
     </div>
