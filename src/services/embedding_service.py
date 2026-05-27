@@ -5,8 +5,8 @@ Provides high-level embedding operations for RAG system.
 
 import logging
 from typing import List, Optional
-from integration.ollama_client import get_ollama_client
-from integration.chromadb_client import get_chromadb_client
+from src.integration.ollama_client import get_ollama_client
+from src.integration.chromadb_client import get_chromadb_client
 
 logger = logging.getLogger(__name__)
 

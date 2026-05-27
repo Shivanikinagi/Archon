@@ -5,7 +5,7 @@ Provides prompt templates, response parsing, and generation utilities.
 
 import logging
 from typing import Optional, AsyncGenerator, Dict, Any, List
-from integration.ollama_client import get_ollama_client
+from src.integration.ollama_client import get_ollama_client
 import re
 
 logger = logging.getLogger(__name__)

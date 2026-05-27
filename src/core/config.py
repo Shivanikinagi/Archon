@@ -140,6 +140,15 @@ class FactCheckConfig(BaseSettings):
         env_prefix = "FACT_CHECK_"
 
 
+class DatabaseConfig(BaseSettings):
+    """Database configuration."""
+    db_url: str = Field(default="postgresql+asyncpg://research:research_password@localhost:5432/research_db", description="Database URL")
+    db_pool_size: int = Field(default=20, ge=1, description="Connection pool size")
+
+    class Config:
+        env_prefix = "DB_"
+
+
 class APIConfig(BaseSettings):
     """API server configuration."""
     host: str = Field(default="0.0.0.0", description="API host")
@@ -147,6 +156,17 @@ class APIConfig(BaseSettings):
     reload: bool = False
     workers: int = Field(default=4, ge=1, description="Number of workers")
     timeout: int = Field(default=300, ge=60, description="Request timeout")
+    api_title: str = Field(default="Deep Research Agent API", description="API title")
+    api_description: str = Field(default="Production-grade autonomous research platform", description="API description")
+    api_version: str = Field(default="1.0.0", description="API version")
+    api_host: str = Field(default="0.0.0.0", description="API host for uvicorn")
+    api_port: int = Field(default=8000, description="API port for uvicorn")
+    api_workers: int = Field(default=1, description="API workers for uvicorn")
+    api_reload: bool = Field(default=True, description="API reload for uvicorn")
+    cors_origins: list[str] = Field(default=["*"], description="CORS allowed origins")
+    cors_credentials: bool = Field(default=True, description="CORS allow credentials")
+    cors_methods: list[str] = Field(default=["*"], description="CORS allowed methods")
+    cors_headers: list[str] = Field(default=["*"], description="CORS allowed headers")
 
     class Config:
         env_prefix = "API_"
@@ -155,6 +175,9 @@ class APIConfig(BaseSettings):
 class LoggingConfig(BaseSettings):
     """Logging configuration."""
     level: str = Field(default="INFO", description="Log level")
+    log_level: str = Field(default="INFO", description="Log level for uvicorn")
+    log_format: str = Field(default="standard", description="Log format type")
+    log_file: Optional[str] = Field(default=None, description="Log file path")
     file: Optional[str] = None
     max_bytes: int = Field(default=10485760, ge=1024, description="Max log file size")
     backup_count: int = Field(default=5, ge=1, description="Number of backup files")
@@ -170,6 +193,7 @@ class Config(BaseSettings):
     debug: bool = False
 
     # Components
+    database: DatabaseConfig = Field(default_factory=DatabaseConfig)
     llm: LLMConfig = Field(default_factory=LLMConfig)
     ollama: OllamaConfig = Field(default_factory=OllamaConfig)
     vector_store: VectorStoreConfig = Field(default_factory=VectorStoreConfig)
@@ -185,6 +209,7 @@ class Config(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = False
+        extra = "ignore"  # Allow extra fields from .env
 
     @validator("research")
     def validate_research_dirs(cls, v: ResearchConfig) -> ResearchConfig:
@@ -192,6 +217,10 @@ class Config(BaseSettings):
         Path(v.temp_dir).mkdir(parents=True, exist_ok=True)
         Path(v.cache_dir).mkdir(parents=True, exist_ok=True)
         return v
+
+    @property
+    def is_production(self) -> bool:
+        return self.environment.lower() == "production"
 
 
 @lru_cache(maxsize=1)
@@ -203,3 +232,7 @@ def get_config() -> Config:
         Configuration object
     """
     return Config()
+
+
+# Alias for compatibility
+get_settings = get_config

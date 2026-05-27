@@ -25,25 +25,18 @@ def research(
     query: str = typer.Argument(..., help="Research query"),
     depth: str = typer.Option(
         "moderate",
-        "--depth",
-        "-d",
         help="Research depth: shallow, moderate, deep, exhaustive",
     ),
     sources: str = typer.Option(
         "web,academic",
-        "--sources",
-        "-s",
         help="Source types: web, academic, news, docs, books, uploaded",
     ),
     output: Optional[str] = typer.Option(
         None,
-        "--output",
-        "-o",
         help="Output file path for report",
     ),
     max_results: int = typer.Option(
         50,
-        "--max-results",
         help="Maximum number of results",
     ),
 ):
@@ -180,10 +173,10 @@ def config_show():
 
 @app.command()
 def api_run(
-    host: str = typer.Option("0.0.0.0", "--host", help="API host"),
-    port: int = typer.Option(8000, "--port", help="API port"),
-    workers: int = typer.Option(1, "--workers", help="Number of workers"),
-    reload: bool = typer.Option(True, "--reload/--no-reload", help="Auto-reload on changes"),
+    host: str = typer.Option("0.0.0.0", help="API host"),
+    port: int = typer.Option(8000, help="API port"),
+    workers: int = typer.Option(1, help="Number of workers"),
+    reload: bool = typer.Option(False, help="Auto-reload on changes"),
 ):
     """Run the API server."""
     try:

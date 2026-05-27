@@ -139,7 +139,8 @@ warn_unused_configs = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--strict-markers -v --cov=src --cov-report=html"
+addopts = "--strict-markers -v"
+asyncio_mode = "auto"
 markers = [
     "unit: Unit tests",
     "integration: Integration tests",

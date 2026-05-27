@@ -9,7 +9,14 @@ from fastapi.middleware.gzip import GZipMiddleware
 
 from src.core.config import get_config
 from src.core.logger import get_logger, setup_logging
-from src.api.routes import router
+from src.api.routes import (
+    auth_router,
+    research_router,
+    reports_router,
+    documents_router,
+    graphs_router,
+    admin_router,
+)
 
 logger = get_logger(__name__)
 
@@ -55,7 +62,12 @@ def create_app() -> FastAPI:
     )
 
     # Include routes
-    app.include_router(router)
+    app.include_router(auth_router, prefix="/api/v1/auth", tags=["auth"])
+    app.include_router(research_router, prefix="/api/v1/research", tags=["research"])
+    app.include_router(reports_router, prefix="/api/v1/reports", tags=["reports"])
+    app.include_router(documents_router, prefix="/api/v1/documents", tags=["documents"])
+    app.include_router(graphs_router, prefix="/api/v1/graphs", tags=["graphs"])
+    app.include_router(admin_router, prefix="/api/v1/admin", tags=["admin"])
 
     # Add startup/shutdown events
     @app.on_event("startup")

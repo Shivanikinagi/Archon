@@ -5,7 +5,7 @@ Combines web search, academic search, and result aggregation.
 
 import logging
 from typing import List, Optional, Dict, Any
-from integration.search_clients import (
+from src.integration.search_clients import (
     SearchResult,
     get_serper_client,
     get_google_search_client,

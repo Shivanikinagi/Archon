@@ -8,11 +8,8 @@ This module provides higher-level services for:
 - Multi-stage RAG retrieval
 """
 
-from services.embedding_service import EmbeddingService
-from services.llm_service import LLMService, PromptTemplate
-from services.document_processor import DocumentProcessor, DocumentChunk, TextCleaner
-from services.search_service import SearchService
-from services.retrieval_service import RetrievalService, BM25Scorer, RetrievalResult
+# Avoid eager imports to prevent circular imports
+# Import directly from submodules as needed
 
 __all__ = [
     "EmbeddingService",

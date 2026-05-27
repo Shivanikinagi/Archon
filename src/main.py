@@ -14,14 +14,14 @@ from contextlib import asynccontextmanager
 from typing import Optional
 import logging
 
-from core.config import get_settings
-from core.logger import setup_logging, get_logger
-from core.exceptions import ResearchAgentException
-from data.database import init_database, close_database, get_async_session
-from integration.chromadb_client import init_chromadb, close_chromadb
-from integration.neo4j_client import init_neo4j, close_neo4j
-from integration.redis_client import init_redis_cache, close_redis_cache
-from integration.ollama_client import init_ollama, close_ollama
+from src.core.config import get_settings
+from src.core.logger import setup_logging, get_logger
+from src.core.exceptions import ResearchAgentException
+from src.data.database import init_database, close_database, get_async_session
+from src.integration.chromadb_client import init_chromadb, close_chromadb
+from src.integration.neo4j_client import init_neo4j, close_neo4j
+from src.integration.redis_client import init_redis_cache, close_redis_cache
+from src.integration.ollama_client import init_ollama, close_ollama
 from schemas import ErrorResponse, ValidationErrorResponse, HealthResponse
 
 logger = logging.getLogger(__name__)
@@ -265,16 +265,9 @@ def setup_routes(app: FastAPI) -> None:
             "health": "/health",
         }
     
-    # API routes will be included here in next phase
-    # from api.routes import auth, research, reports, documents, graphs
-    # 
-    # api_router = APIRouter(prefix="/api/v1")
-    # api_router.include_router(auth.router, tags=["Authentication"])
-    # api_router.include_router(research.router, tags=["Research"])
-    # api_router.include_router(reports.router, tags=["Reports"])
-    # api_router.include_router(documents.router, tags=["Documents"])
-    # api_router.include_router(graphs.router, tags=["Graphs"])
-    # app.include_router(api_router)
+    # Include all API routes
+    from src.api.routes import router as api_router
+    app.include_router(api_router)
 
 
 # =============================================================================

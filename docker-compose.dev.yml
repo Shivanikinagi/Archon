@@ -1,0 +1,77 @@
+# Development Docker Compose
+version: '3.8'
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama-dev
+    ports:
+      - "11434:11434"
+    environment:
+      - OLLAMA_HOST=0.0.0.0:11434
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - research-network
+
+  chroma:
+    image: ghcr.io/chroma-core/chroma:latest
+    container_name: chroma-dev
+    ports:
+      - "8001:8000"
+    environment:
+      - CHROMA_DB_IMPL=duckdb+parquet
+      - CHROMA_PERSIST_DIRECTORY=/data
+    volumes:
+      - chroma_data:/data
+    networks:
+      - research-network
+
+  neo4j:
+    image: neo4j:5-community
+    container_name: neo4j-dev
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    environment:
+      - NEO4J_AUTH=neo4j/password
+      - NEO4J_PLUGINS=["apoc"]
+    volumes:
+      - neo4j_data:/data
+    networks:
+      - research-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis-dev
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - research-network
+
+  pgvector:
+    image: ankane/pgvector:latest
+    container_name: pgvector-dev
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=research
+      - POSTGRES_PASSWORD=research_password
+      - POSTGRES_DB=research_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - research-network
+
+volumes:
+  ollama_data:
+  chroma_data:
+  neo4j_data:
+  redis_data:
+  postgres_data:
+
+networks:
+  research-network:
+    driver: bridge

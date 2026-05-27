@@ -46,7 +46,15 @@ class TestDocumentProcessor:
         
         processor = DocumentProcessor(chunk_size=100, chunk_overlap=25)
         
-        content = "First paragraph.\n\nSecond paragraph.\n\nThird paragraph.\n\nFourth paragraph."
+        content = (
+            "First paragraph with much more content here to ensure it spans multiple chunks. "
+            "We need enough text to force the processor to create more than one chunk.\n\n"
+            "Second paragraph also with substantial content to test overlap between chunks. "
+            "The overlap should include text from the previous chunk boundary.\n\n"
+            "Third paragraph continues the pattern with even more words and sentences. "
+            "This ensures that chunking and overlap logic is properly exercised.\n\n"
+            "Fourth paragraph finalizes the test document with enough characters."
+        )
         chunks = processor.process_document("doc2", content)
         
         assert len(chunks) > 1

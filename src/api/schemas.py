@@ -32,6 +32,29 @@ class DocumentUploadRequest(BaseModel):
     description: Optional[str] = None
 
 
+class UserRegisterRequest(BaseModel):
+    """Request for user registration."""
+    email: str
+    password: str
+    name: str
+
+
+class UserLoginRequest(BaseModel):
+    """Request for user login."""
+    email: str
+    password: str
+
+
+class RefreshTokenRequest(BaseModel):
+    """Request for token refresh."""
+    refresh_token: str
+
+
+class ModelPullRequest(BaseModel):
+    """Request to pull an Ollama model."""
+    model_name: str
+
+
 # Response Models
 class SourceResponse(BaseModel):
     """Source response."""
@@ -111,3 +134,112 @@ class ErrorResponse(BaseModel):
     error: str
     detail: Optional[str] = None
     timestamp: datetime = Field(default_factory=datetime.now)
+
+
+class TokenResponse(BaseModel):
+    """JWT token response."""
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    expires_in: int
+
+
+class UserResponse(BaseModel):
+    """User response."""
+    user_id: int
+    email: str
+    name: str
+    role: str = "user"
+    created_at: Optional[datetime] = None
+
+
+class ProgressResponse(BaseModel):
+    """Research progress response."""
+    session_id: str
+    status: str
+    progress: float = Field(default=0.0, ge=0.0, le=1.0)
+    current_step: Optional[str] = None
+    message: Optional[str] = None
+    updated_at: datetime = Field(default_factory=datetime.now)
+
+
+class DocumentResponse(BaseModel):
+    """Document response."""
+    doc_id: str
+    title: str
+    filename: str
+    content_type: str
+    size: int
+    uploaded_at: datetime
+    status: str = "processing"
+
+
+class EntityResponse(BaseModel):
+    """Knowledge graph entity response."""
+    node_id: str
+    label: str
+    node_type: str
+    properties: dict = Field(default_factory=dict)
+
+
+class RelationshipResponse(BaseModel):
+    """Knowledge graph relationship response."""
+    edge_id: str
+    source_node_id: str
+    target_node_id: str
+    relationship_type: str
+    properties: dict = Field(default_factory=dict)
+    weight: float = 1.0
+
+
+class GraphSearchResponse(BaseModel):
+    """Knowledge graph search response."""
+    entities: List[EntityResponse]
+    relationships: List[RelationshipResponse]
+
+
+class PathResponse(BaseModel):
+    """Knowledge graph path response."""
+    path: List[EntityResponse]
+    length: int
+    total_weight: float
+
+
+class ReportSummaryResponse(BaseModel):
+    """Report summary for listing."""
+    report_id: str
+    session_id: str
+    title: str
+    format: str
+    generated_at: datetime
+    word_count: int
+
+
+class SystemStatsResponse(BaseModel):
+    """System statistics response."""
+    total_sessions: int
+    total_reports: int
+    total_documents: int
+    total_users: int
+    active_sessions: int
+    system_load: float
+    uptime_seconds: int
+
+
+class UserAdminResponse(BaseModel):
+    """User admin response."""
+    user_id: int
+    email: str
+    name: str
+    role: str
+    is_active: bool = True
+    created_at: Optional[datetime] = None
+    last_login: Optional[datetime] = None
+
+
+class HealthDetailedResponse(BaseModel):
+    """Detailed health check response."""
+    status: str
+    timestamp: datetime = Field(default_factory=datetime.now)
+    version: str
+    services: dict = Field(default_factory=dict)

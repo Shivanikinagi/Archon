@@ -6,8 +6,8 @@ Implements BM25 + semantic search hybrid retrieval and ranking.
 import logging
 from typing import List, Optional, Dict, Any, Tuple
 from dataclasses import dataclass
-from integration.search_clients import SearchResult
-from services.embedding_service import EmbeddingService
+from src.integration.search_clients import SearchResult
+from src.services.embedding_service import EmbeddingService
 import re
 
 logger = logging.getLogger(__name__)
