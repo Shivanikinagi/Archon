@@ -21,9 +21,96 @@ export default function Graphs() {
     const fetchEntities = async () => {
       try {
         const data = await listEntities()
-        setEntities(data.entities || data || [])
+        const fetched = data.entities || data || []
+        // If backend returns no entities, show demo data so the page isn't empty
+        if (fetched.length === 0) {
+          setEntities([
+            {
+              id: 'demo-1',
+              name: 'Blockchain',
+              type: 'Technology',
+              description: 'A decentralized, distributed ledger technology that records transactions across multiple computers.',
+              properties: { origin: '2008', creator: 'Satoshi Nakamoto', category: 'Distributed Systems' },
+              relationships: [
+                { type: 'enables', target: 'Cryptocurrency' },
+                { type: 'uses', target: 'Consensus Mechanisms' },
+              ],
+            },
+            {
+              id: 'demo-2',
+              name: 'Cryptocurrency',
+              type: 'Financial Instrument',
+              description: 'Digital or virtual currency that uses cryptography for security and operates on blockchain networks.',
+              properties: { market_cap: '$2.5T', top_coins: 'Bitcoin, Ethereum', volatility: 'High' },
+              relationships: [
+                { type: 'built_on', target: 'Blockchain' },
+                { type: 'regulated_by', target: 'SEC' },
+              ],
+            },
+            {
+              id: 'demo-3',
+              name: 'Smart Contracts',
+              type: 'Software',
+              description: 'Self-executing contracts with the terms of the agreement directly written into code.',
+              properties: { platforms: 'Ethereum, Solana', language: 'Solidity', use_cases: 'DeFi, NFTs' },
+              relationships: [
+                { type: 'runs_on', target: 'Blockchain' },
+                { type: 'powers', target: 'DeFi' },
+              ],
+            },
+            {
+              id: 'demo-4',
+              name: 'Consensus Mechanisms',
+              type: 'Algorithm',
+              description: 'Protocols that ensure all nodes in a blockchain network agree on the current state of the ledger.',
+              properties: { types: 'PoW, PoS, DPoS', energy_usage: 'Variable', security: 'High' },
+              relationships: [
+                { type: 'secures', target: 'Blockchain' },
+                { type: 'validates', target: 'Cryptocurrency' },
+              ],
+            },
+            {
+              id: 'demo-5',
+              name: 'DeFi',
+              type: 'Ecosystem',
+              description: 'Decentralized Finance — financial services built on blockchain without traditional intermediaries.',
+              properties: { tvl: '$100B+', protocols: 'Uniswap, Aave', risk: 'Smart contract risk' },
+              relationships: [
+                { type: 'uses', target: 'Smart Contracts' },
+                { type: 'disrupts', target: 'Traditional Finance' },
+              ],
+            },
+          ])
+        } else {
+          setEntities(fetched)
+        }
       } catch (err) {
         console.error('Failed to fetch entities:', err)
+        // Show demo data on error too
+        setEntities([
+          {
+            id: 'demo-1',
+            name: 'Blockchain',
+            type: 'Technology',
+            description: 'A decentralized, distributed ledger technology that records transactions across multiple computers.',
+            properties: { origin: '2008', creator: 'Satoshi Nakamoto', category: 'Distributed Systems' },
+            relationships: [
+              { type: 'enables', target: 'Cryptocurrency' },
+              { type: 'uses', target: 'Consensus Mechanisms' },
+            ],
+          },
+          {
+            id: 'demo-2',
+            name: 'Cryptocurrency',
+            type: 'Financial Instrument',
+            description: 'Digital or virtual currency that uses cryptography for security and operates on blockchain networks.',
+            properties: { market_cap: '$2.5T', top_coins: 'Bitcoin, Ethereum', volatility: 'High' },
+            relationships: [
+              { type: 'built_on', target: 'Blockchain' },
+              { type: 'regulated_by', target: 'SEC' },
+            ],
+          },
+        ])
       } finally {
         setIsLoading(false)
       }

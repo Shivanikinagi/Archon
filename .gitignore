@@ -2,7 +2,7 @@
 __pycache__/
 *.py[cod]
 *$py.class
-
+QUICK_START.md
 # C extensions
 *.so
 frontend/node_modules/
@@ -164,3 +164,4 @@ htmlcov/
 
 docs/
 deep_research_agent\DELIVERY_MANIFEST.md
+deep_research_agent\QUICK_START.md 

@@ -21,9 +21,9 @@ const sourceOptions = [
 ]
 
 const depthOptions = [
-  { value: 'shallow', label: 'Quick', description: 'Fast overview (~5 min)' },
-  { value: 'moderate', label: 'Standard', description: 'Balanced depth (~15 min)' },
-  { value: 'deep', label: 'Deep', description: 'Comprehensive (~30 min)' },
+  { value: 'shallow', label: 'Quick', description: 'Fast overview (~5 sec)' },
+  { value: 'moderate', label: 'Standard', description: 'Balanced depth (~15 sec)' },
+  { value: 'deep', label: 'Deep', description: 'Comprehensive (~15 sec)' },
 ]
 
 export default function Research() {
@@ -99,7 +99,9 @@ export default function Research() {
     intervalRef.current = setInterval(async () => {
       try {
         const status = await getResearchStatus(sessionId)
-        setResearchProgress(status.progress || 0)
+        // Backend sends progress as 0.0-1.0, convert to 0-100 for display
+        const progressPercent = Math.round((status.progress || 0) * 100)
+        setResearchProgress(progressPercent)
 
         if (status.status === 'completed') {
           setResearchStatus('completed')
@@ -113,6 +115,16 @@ export default function Research() {
         }
       } catch (err) {
         console.error('Poll error:', err)
+        // If session not found (404) or server unreachable, stop polling and show error
+        if (err.response?.status === 404) {
+          setResearchStatus('failed')
+          setError('Research session not found. The server may have restarted. Please try again.')
+          clearInterval(intervalRef.current)
+        } else if (err.code === 'ECONNABORTED' || err.code === 'ERR_NETWORK' || !err.response) {
+          setResearchStatus('failed')
+          setError('Cannot connect to research server. Please make sure the backend is running.')
+          clearInterval(intervalRef.current)
+        }
       }
     }, 3000)
   }
@@ -124,6 +136,19 @@ export default function Research() {
     } catch (err) {
       setError('Failed to fetch report')
     }
+  }
+
+  const handleExport = () => {
+    if (!report || !report.content) return
+    const blob = new Blob([report.content], { type: 'text/markdown' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `research-report-${currentResearch?.query?.replace(/\s+/g, '-').toLowerCase() || 'export'}.md`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
   }
 
   useEffect(() => {
@@ -276,7 +301,7 @@ export default function Research() {
               <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
               Research Report
             </h3>
-            <button className="btn-secondary text-sm">
+            <button onClick={handleExport} className="btn-secondary text-sm">
               <Download className="w-4 h-4 mr-2" />
               Export
             </button>

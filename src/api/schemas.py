@@ -107,6 +107,8 @@ class ResearchSessionResponse(BaseModel):
     research_depth: str
     created_at: datetime
     progress: float = Field(default=0.0, ge=0.0, le=1.0)
+    error: Optional[str] = None
+    current_step: Optional[str] = None
 
 
 class ResearchReportResponse(BaseModel):
@@ -116,8 +118,8 @@ class ResearchReportResponse(BaseModel):
     title: str
     content: str
     format: str = "markdown"
-    citations: List[CitationResponse]
-    sources: List[SourceResponse]
+    citations: List[dict] = Field(default_factory=list)
+    sources: List[dict] = Field(default_factory=list)
     generated_at: datetime
     word_count: int
 

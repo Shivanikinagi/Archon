@@ -3,9 +3,14 @@ FastAPI application factory and setup.
 """
 
 from contextlib import asynccontextmanager
+from datetime import datetime
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 from src.core.config import get_config
 from src.core.logger import get_logger, setup_logging
@@ -68,6 +73,12 @@ def create_app() -> FastAPI:
     app.include_router(documents_router, prefix="/api/v1/documents", tags=["documents"])
     app.include_router(graphs_router, prefix="/api/v1/graphs", tags=["graphs"])
     app.include_router(admin_router, prefix="/api/v1/admin", tags=["admin"])
+
+    # Health check endpoint
+    @app.get("/health", tags=["health"])
+    async def health_check():
+        """Health check endpoint."""
+        return {"status": "healthy", "timestamp": datetime.now().isoformat()}
 
     # Add startup/shutdown events
     @app.on_event("startup")
