@@ -144,6 +144,7 @@ Respond ONLY with a JSON object in this exact format:
         json_match = re.search(r'\{.*\}', confidence_text, re.DOTALL)
         if json_match:
             scores = json.loads(json_match.group())
+            logger.info(f"Confidence scores calculated: {scores}")
             # Ensure overall exists
             if 'overall' not in scores:
                 scores['overall'] = sum([
@@ -160,6 +161,7 @@ Respond ONLY with a JSON object in this exact format:
     # Fallback: compute heuristic confidence
     citation_count = len(re.findall(r'\[\d+\]', research_content))
     heuristic = min(0.95, 0.5 + (citation_count * 0.03) + (len(sources) * 0.02))
+    logger.info(f"Using heuristic confidence: {heuristic:.2f} (citations: {citation_count}, sources: {len(sources)})")
     return {
         "executive_summary": heuristic,
         "recent_advancements": heuristic,
