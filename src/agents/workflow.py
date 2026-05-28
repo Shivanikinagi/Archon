@@ -1,8 +1,5 @@
 """
-Workflow Orchestration - Coordinates all research agents in a state machine.
-
-States:
-    plan -> search -> retrieve -> write -> fact_check -> review -> cite -> done
+Workflow Orchestration - Coordinates all research agents with confidence tracking.
 """
 
 import asyncio
@@ -10,27 +7,23 @@ from typing import Any
 from enum import Enum
 from datetime import datetime
 
-from src.core.base import ExecutionResult
-from src.core.types import AgentRole, CitationStyle, ResearchQuery, ResearchDepth
-from src.core.logger import get_logger
+from core.base import ExecutionResult
+from core.types import AgentRole, CitationStyle, ResearchQuery, ResearchDepth
+from core.logger import get_logger
 
-from src.agents.planner import PlannerAgent
-from src.agents.web_search import WebSearchAgent
-from src.agents.academic_search import AcademicSearchAgent
-from src.agents.document_search import DocumentSearchAgent
-from src.agents.writer import WriterAgent
-from src.agents.fact_checker import FactCheckerAgent
-from src.agents.reviewer import ReviewerAgent
-from src.agents.citation_agent import CitationAgent
+from agents.planner import PlannerAgent
+from agents.web_search import WebSearchAgent
+from agents.academic_search import AcademicSearchAgent
+from agents.document_search import DocumentSearchAgent
+from agents.writer import WriterAgent
+from agents.fact_checker import FactCheckerAgent
+from agents.reviewer import ReviewerAgent
+from agents.citation_agent import CitationAgent
 
-from src.services.llm_service import LLMService
-from src.services.search_service import SearchService
-from src.services.retrieval_service import RetrievalService
+from services.llm_service import LLMService
 
 
 class WorkflowState(str, Enum):
-    """States in the research workflow."""
-
     PLAN = "plan"
     SEARCH = "search"
     RETRIEVE = "retrieve"
@@ -43,7 +36,7 @@ class WorkflowState(str, Enum):
 
 
 class ResearchWorkflow:
-    """Orchestrates the full research pipeline using a simple state machine."""
+    """Orchestrates the full research pipeline with confidence tracking."""
 
     def __init__(
         self,
@@ -56,19 +49,6 @@ class ResearchWorkflow:
         reviewer: ReviewerAgent | None = None,
         citation_agent: CitationAgent | None = None,
     ):
-        """
-        Initialize the research workflow.
-
-        Args:
-            planner: PlannerAgent instance.
-            web_searcher: WebSearchAgent instance.
-            academic_searcher: AcademicSearchAgent instance.
-            document_searcher: DocumentSearchAgent instance.
-            writer: WriterAgent instance.
-            fact_checker: FactCheckerAgent instance.
-            reviewer: ReviewerAgent instance.
-            citation_agent: CitationAgent instance.
-        """
         self.planner = planner or PlannerAgent()
         self.web_searcher = web_searcher or WebSearchAgent()
         self.academic_searcher = academic_searcher or AcademicSearchAgent()
@@ -77,19 +57,9 @@ class ResearchWorkflow:
         self.fact_checker = fact_checker or FactCheckerAgent()
         self.reviewer = reviewer or ReviewerAgent()
         self.citation_agent = citation_agent or CitationAgent()
-
         self.logger = get_logger(self.__class__.__name__)
 
     async def run(self, query: str) -> dict:
-        """
-        Execute the full research workflow for a given query.
-
-        Args:
-            query: The research query string.
-
-        Returns:
-            Dictionary containing the final report, citations, review, and metadata.
-        """
         self.logger.info(f"Starting research workflow for query: {query!r}")
 
         state = WorkflowState.PLAN
@@ -105,12 +75,13 @@ class ResearchWorkflow:
             "verification_results": None,
             "review_feedback": None,
             "citations": None,
+            "confidence_scores": {},
             "errors": [],
             "started_at": datetime.now(),
         }
 
         try:
-            while state != WorkflowState.DONE and state != WorkflowState.FAILED:
+            while state not in (WorkflowState.DONE, WorkflowState.FAILED):
                 self.logger.info(f"Workflow state: {state.value}")
 
                 if state == WorkflowState.PLAN:
@@ -152,31 +123,42 @@ class ResearchWorkflow:
         return self._build_output(context)
 
     async def _run_plan(self, context: dict) -> WorkflowState:
-        """Run the planner agent."""
         result = await self.planner.run(query=context["query"])
         if not result.success:
             context["errors"].append(f"Planning failed: {result.error}")
             return WorkflowState.FAILED
 
         context["plan"] = result.data
-        self.logger.info(f"Plan created with {len(result.data.search_queries)} search queries")
+        # Detect relationship-heavy queries
+        query_lower = context["query"].lower()
+        relationship_keywords = [
+            "connected", "relationship", "ecosystem", "network", "partnership",
+            "competition", "compare", "versus", "vs", "between", "link",
+            "how are", "connections", "landscape", "players", "market",
+        ]
+        context["is_relationship_query"] = any(kw in query_lower for kw in relationship_keywords)
+        self.logger.info(
+            f"Plan created with {len(result.data.search_queries)} search queries. "
+            f"Relationship query: {context.get('is_relationship_query', False)}"
+        )
         return WorkflowState.SEARCH
 
     async def _run_search(self, context: dict) -> WorkflowState:
-        """Run web and academic search agents."""
         plan = context.get("plan")
         search_queries = [context["query"]]
         if plan and hasattr(plan, "search_queries"):
             search_queries = plan.search_queries
 
-        web_tasks = [
-            self.web_searcher.run(query=q, num_results=10)
-            for q in search_queries
-        ]
-        academic_tasks = [
-            self.academic_searcher.run(query=q, num_results=10)
-            for q in search_queries
-        ]
+        # For relationship queries, add entity-specific searches
+        if context.get("is_relationship_query"):
+            # Extract potential entities from query using simple heuristic
+            import re
+            words = re.findall(r'\b[A-Z][a-zA-Z]+\b', context["query"])
+            for entity in set(words):
+                search_queries.append(f"{entity} partnerships collaborations 2024 2025")
+
+        web_tasks = [self.web_searcher.run(query=q, num_results=10) for q in search_queries]
+        academic_tasks = [self.academic_searcher.run(query=q, num_results=10) for q in search_queries]
 
         web_results_list = await asyncio.gather(*web_tasks, return_exceptions=True)
         academic_results_list = await asyncio.gather(*academic_tasks, return_exceptions=True)
@@ -184,7 +166,6 @@ class ResearchWorkflow:
         web_results = []
         for res in web_results_list:
             if isinstance(res, Exception):
-                self.logger.warning(f"Web search task failed: {res}")
                 context["errors"].append(f"Web search failed: {res}")
             elif res.success and res.data:
                 web_results.extend(res.data)
@@ -192,7 +173,6 @@ class ResearchWorkflow:
         academic_results = []
         for res in academic_results_list:
             if isinstance(res, Exception):
-                self.logger.warning(f"Academic search task failed: {res}")
                 context["errors"].append(f"Academic search failed: {res}")
             elif res.success and res.data:
                 academic_results.extend(res.data)
@@ -201,41 +181,44 @@ class ResearchWorkflow:
         context["academic_results"] = academic_results
         context["all_sources"] = web_results + academic_results
 
+        # Source quality confidence
+        total_sources = len(web_results) + len(academic_results)
+        academic_ratio = len(academic_results) / max(1, total_sources)
+        context["confidence_scores"]["source_quality"] = min(1.0, 0.5 + academic_ratio * 0.5 + min(total_sources, 20) * 0.01)
+
         self.logger.info(
-            f"Search complete: {len(web_results)} web, {len(academic_results)} academic results"
+            f"Search complete: {len(web_results)} web, {len(academic_results)} academic results. "
+            f"Source confidence: {context['confidence_scores']['source_quality']:.2f}"
         )
         return WorkflowState.RETRIEVE
 
     async def _run_retrieve(self, context: dict) -> WorkflowState:
-        """Run document retrieval agent."""
-        result = await self.document_searcher.run(
-            query=context["query"],
-            top_k=10,
-        )
+        result = await self.document_searcher.run(query=context["query"], top_k=10)
         if result.success and result.data:
             context["document_results"] = result.data
             context["all_sources"].extend(result.data)
             self.logger.info(f"Document retrieval returned {len(result.data)} results")
-        else:
-            if result.error:
-                self.logger.warning(f"Document retrieval failed: {result.error}")
-                context["errors"].append(f"Document retrieval failed: {result.error}")
-            else:
-                self.logger.info("No indexed documents found; continuing without them")
-
         return WorkflowState.WRITE
 
     async def _run_write(self, context: dict) -> WorkflowState:
-        """Run the writer agent."""
         sources = context.get("all_sources", [])
         outline = {"sections": ["Introduction", "Body", "Conclusion"]}
         if context.get("plan") and hasattr(context["plan"], "subtopics"):
             outline["sections"] = context["plan"].subtopics
 
+        # Pass confidence data to writer
+        confidence_data = {
+            "overall": context["confidence_scores"].get("source_quality", 0.5),
+            "by_section": {
+                "Source Quality": context["confidence_scores"].get("source_quality", 0.5),
+            }
+        }
+
         result = await self.writer.run(
             query=context["query"],
             sources=sources,
             outline=outline,
+            confidence_data=confidence_data,
         )
         if not result.success:
             context["errors"].append(f"Writing failed: {result.error}")
@@ -246,11 +229,9 @@ class ResearchWorkflow:
         return WorkflowState.FACT_CHECK
 
     async def _run_fact_check(self, context: dict) -> WorkflowState:
-        """Run the fact checker agent."""
         report = context.get("report", "")
         sources = context.get("all_sources", [])
 
-        # Extract simple text sources for fact-checking
         source_texts = []
         for s in sources:
             if hasattr(s, "content"):
@@ -260,80 +241,68 @@ class ResearchWorkflow:
             elif isinstance(s, dict):
                 source_texts.append(str(s.get("content", s.get("snippet", ""))))
 
-        # If no sources, skip fact-checking
         if not source_texts:
-            self.logger.warning("No source texts available for fact-checking; skipping")
             return WorkflowState.REVIEW
 
-        # Use LLM to extract claims from the report
         try:
             llm = LLMService()
             claims = await llm.extract_claims(report)
         except Exception as e:
-            self.logger.warning(f"Claim extraction failed: {e}; skipping fact-checking")
+            self.logger.warning(f"Claim extraction failed: {e}")
             return WorkflowState.REVIEW
 
         if not claims:
-            self.logger.info("No claims extracted; skipping fact-checking")
             return WorkflowState.REVIEW
 
-        result = await self.fact_checker.run(
-            claims=claims,
-            sources=source_texts,
-        )
+        result = await self.fact_checker.run(claims=claims, sources=source_texts)
         if result.success:
             context["verification_results"] = result.data
-            self.logger.info(f"Fact-checking complete for {len(claims)} claims")
+            avg_confidence = result.metadata.get("average_confidence", 0.5)
+            context["confidence_scores"]["fact_check"] = avg_confidence
+            verified_ratio = result.metadata.get("verified_count", 0) / max(1, len(claims))
+            context["confidence_scores"]["verified_ratio"] = verified_ratio
+            self.logger.info(
+                f"Fact-checking complete: {verified_ratio:.0%} verified, "
+                f"avg confidence={avg_confidence:.2f}"
+            )
         else:
-            self.logger.warning(f"Fact-checking failed: {result.error}")
             context["errors"].append(f"Fact-checking failed: {result.error}")
 
         return WorkflowState.REVIEW
 
     async def _run_review(self, context: dict) -> WorkflowState:
-        """Run the reviewer agent."""
         report = context.get("report", "")
-        criteria = [
-            "completeness",
-            "accuracy",
-            "clarity",
-            "tone",
-            "structure",
-        ]
+        criteria = ["completeness", "accuracy", "clarity", "analytical_depth", "comparisons"]
 
-        result = await self.reviewer.run(
-            report=report,
-            criteria=criteria,
-        )
+        result = await self.reviewer.run(report=report, criteria=criteria)
         if result.success:
             context["review_feedback"] = result.data
+            # Extract review score as confidence
+            review_data = result.data if isinstance(result.data, dict) else {}
+            scores = review_data.get("scores", {})
+            if scores:
+                avg_review = sum(scores.values()) / len(scores)
+                context["confidence_scores"]["review_quality"] = avg_review / 100.0 if avg_review > 1 else avg_review
             self.logger.info("Review complete")
         else:
-            self.logger.warning(f"Review failed: {result.error}")
             context["errors"].append(f"Review failed: {result.error}")
 
         return WorkflowState.CITE
 
     async def _run_cite(self, context: dict) -> WorkflowState:
-        """Run the citation agent."""
         sources = context.get("all_sources", [])
         style = CitationStyle.APA
 
-        result = await self.citation_agent.run(
-            sources=sources,
-            style=style,
-        )
+        result = await self.citation_agent.run(sources=sources, style=style)
         if result.success:
             context["citations"] = result.data
             self.logger.info(f"Citations generated: {len(result.data)}")
         else:
-            self.logger.warning(f"Citation generation failed: {result.error}")
             context["errors"].append(f"Citation generation failed: {result.error}")
 
         return WorkflowState.DONE
 
     def _build_output(self, context: dict) -> dict:
-        """Build the final workflow output dictionary."""
         citations = context.get("citations", [])
         formatted_citations = []
         for c in citations:
@@ -350,6 +319,15 @@ class ResearchWorkflow:
             review_text = str(review)
             review_scores = {}
 
+        # Calculate overall confidence
+        conf = context.get("confidence_scores", {})
+        overall_confidence = (
+            conf.get("source_quality", 0.5) * 0.3 +
+            conf.get("fact_check", 0.5) * 0.3 +
+            conf.get("verified_ratio", 0.5) * 0.2 +
+            conf.get("review_quality", 0.5) * 0.2
+        )
+
         return {
             "query": context["query"],
             "report": context.get("report"),
@@ -357,6 +335,11 @@ class ResearchWorkflow:
             "review_feedback": review_text,
             "review_scores": review_scores,
             "verification_results": context.get("verification_results"),
+            "confidence_scores": {
+                **conf,
+                "overall": round(overall_confidence, 3),
+            },
+            "is_relationship_query": context.get("is_relationship_query", False),
             "state": context["state"].value,
             "errors": context["errors"],
             "metadata": {

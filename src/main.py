@@ -14,15 +14,15 @@ from contextlib import asynccontextmanager
 from typing import Optional
 import logging
 
-from src.core.config import get_settings
-from src.core.logger import setup_logging, get_logger
-from src.core.exceptions import ResearchAgentException
-from src.data.database import init_database, close_database, get_async_session
-from src.integration.chromadb_client import init_chromadb, close_chromadb
-from src.integration.neo4j_client import init_neo4j, close_neo4j
-from src.integration.redis_client import init_redis_cache, close_redis_cache
-from src.integration.ollama_client import init_ollama, close_ollama
-from schemas import ErrorResponse, ValidationErrorResponse, HealthResponse
+from core.config import get_settings
+from core.logger import setup_logging, get_logger
+from core.exceptions import ResearchAgentError
+from data.database import init_database, close_database, get_async_session
+from integration.chromadb_client import init_chromadb, close_chromadb
+from integration.neo4j_client import init_neo4j, close_neo4j
+from integration.redis_client import init_redis_cache, close_redis_cache
+from integration.ollama_client import init_ollama, close_ollama
+from api.schemas import ErrorResponse, HealthResponse
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -138,9 +138,9 @@ async def lifespan(app: FastAPI):
 def setup_error_handlers(app: FastAPI) -> None:
     """Setup global error handlers"""
     
-    @app.exception_handler(ResearchAgentException)
+    @app.exception_handler(ResearchAgentError)
     async def research_agent_exception_handler(
-        request: Request, exc: ResearchAgentException
+        request: Request, exc: ResearchAgentError
     ):
         """Handle custom application exceptions"""
         logger.warning(
@@ -266,7 +266,7 @@ def setup_routes(app: FastAPI) -> None:
         }
     
     # Include all API routes
-    from src.api.routes import router as api_router
+    from api.routes import router as api_router
     app.include_router(api_router)
 
 

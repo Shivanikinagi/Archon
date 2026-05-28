@@ -12,7 +12,7 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useStore } from '../stores/useStore.js'
-import { listEntities } from '../services/api.js'
+import { getGraphTopology } from '../services/api.js'
 import {
   Network,
   Search,
@@ -21,11 +21,10 @@ import {
   Link2,
   ChevronRight,
   Hash,
-  Info,
-  ZoomIn,
-  ZoomOut,
   Maximize2,
   GitBranch,
+  AlertTriangle,
+  BarChart3,
 } from 'lucide-react'
 
 // --- Custom Node Component ---
@@ -38,6 +37,9 @@ function EntityNode({ data, selected }) {
     Ecosystem: { bg: '#8b5cf6', border: '#7c3aed', light: '#ede9fe' },
     Organization: { bg: '#06b6d4', border: '#0891b2', light: '#cffafe' },
     Person: { bg: '#f97316', border: '#ea580c', light: '#ffedd5' },
+    Model: { bg: '#14b8a6', border: '#0d9488', light: '#ccfbf1' },
+    Company: { bg: '#6366f1', border: '#4f46e5', light: '#e0e7ff' },
+    Product: { bg: '#f59e0b', border: '#d97706', light: '#fef3c7' },
     default: { bg: '#6b7280', border: '#4b5563', light: '#f3f4f6' },
   }
   const c = colors[data.type] || colors.default
@@ -71,98 +73,74 @@ function EntityNode({ data, selected }) {
 
 const nodeTypes = { entity: EntityNode }
 
-// --- Build React Flow graph from entities ---
-function buildFlowGraph(entities) {
-  if (!entities || entities.length === 0) return { nodes: [], edges: [] }
+// --- Build React Flow graph from topology ---
+function buildFlowGraph(topology) {
+  if (!topology || !topology.nodes || topology.nodes.length === 0) {
+    return { nodes: [], edges: [] }
+  }
 
   const nodes = []
   const edges = []
-  const nodeMap = new Map()
-  const positions = [
-    { x: 0, y: 0 },
-    { x: 250, y: -80 },
-    { x: 250, y: 80 },
-    { x: 500, y: -120 },
-    { x: 500, y: 0 },
-    { x: 500, y: 120 },
-    { x: -250, y: -60 },
-    { x: -250, y: 60 },
-    { x: 0, y: -180 },
-    { x: 0, y: 180 },
-    { x: 750, y: -60 },
-    { x: 750, y: 60 },
-  ]
 
-  entities.forEach((entity, index) => {
-    const id = entity.id || `node-${index}`
-    const pos = positions[index % positions.length]
-    // Add some randomness to prevent perfect overlap
-    const jitterX = (Math.random() - 0.5) * 60
-    const jitterY = (Math.random() - 0.5) * 60
-
-    nodes.push({
-      id,
-      type: 'entity',
-      position: { x: pos.x + jitterX, y: pos.y + jitterY },
-      data: {
-        label: entity.name || entity.label || 'Unknown',
-        type: entity.type || 'Entity',
-        description: entity.description || '',
-        properties: entity.properties || {},
-        relationships: entity.relationships || [],
-      },
-    })
-    nodeMap.set(entity.name || entity.label, id)
-    nodeMap.set(id, id)
+  // Use a force-directed-like layout based on connectivity
+  const connectedness = new Map()
+  topology.edges.forEach((e) => {
+    connectedness.set(e.source, (connectedness.get(e.source) || 0) + 1)
+    connectedness.set(e.target, (connectedness.get(e.target) || 0) + 1)
   })
 
-  // Create edges from relationships
-  entities.forEach((entity) => {
-    const sourceId = nodeMap.get(entity.id) || nodeMap.get(entity.name)
-    if (!sourceId) return
+  // Sort by connectedness (hubs first)
+  const sortedNodes = [...topology.nodes].sort(
+    (a, b) => (connectedness.get(b.id) || 0) - (connectedness.get(a.id) || 0)
+  )
 
-    ;(entity.relationships || []).forEach((rel, idx) => {
-      const targetName = rel.target || rel.name
-      let targetId = nodeMap.get(targetName)
+  // Place hubs in center, others in rings
+  const placed = new Map()
+  const centerX = 0
+  const centerY = 0
 
-      if (!targetId) {
-        const newId = `implicit-${targetName.replace(/\s+/g, '-').toLowerCase()}`
-        if (!nodeMap.has(newId)) {
-          const angle = Math.random() * 2 * Math.PI
-          const radius = 350 + Math.random() * 150
-          nodes.push({
-            id: newId,
-            type: 'entity',
-            position: { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius },
-            data: {
-              label: targetName,
-              type: 'Related',
-              description: '',
-              properties: {},
-              relationships: [],
-            },
-          })
-          nodeMap.set(targetName, newId)
-          nodeMap.set(newId, newId)
-        }
-        targetId = newId
-      }
+  sortedNodes.forEach((node, index) => {
+    const conn = connectedness.get(node.id) || 0
+    let x, y
 
-      if (targetId && targetId !== sourceId) {
-        edges.push({
-          id: `e-${sourceId}-${targetId}-${idx}`,
-          source: sourceId,
-          target: targetId,
-          label: rel.type || 'relates to',
-          type: 'smoothstep',
-          animated: true,
-          style: { stroke: '#94a3b8', strokeWidth: 1.5 },
-          labelStyle: { fontSize: 10, fill: '#64748b' },
-          labelBgStyle: { fill: '#f8fafc', fillOpacity: 0.9 },
-          labelBgPadding: [4, 4],
-          labelBgBorderRadius: 4,
-        })
-      }
+    if (index === 0) {
+      x = centerX
+      y = centerY
+    } else {
+      const ring = Math.ceil(index / 5)
+      const angle = (index * 137.5 * Math.PI) / 180 // Golden angle
+      const radius = 200 + ring * 180 + Math.random() * 60
+      x = centerX + Math.cos(angle) * radius
+      y = centerY + Math.sin(angle) * radius
+    }
+
+    placed.set(node.id, { x, y })
+
+    nodes.push({
+      id: node.id,
+      type: 'entity',
+      position: { x, y },
+      data: {
+        label: node.label || node.id,
+        type: node.type || 'Entity',
+        properties: node.properties || {},
+      },
+    })
+  })
+
+  topology.edges.forEach((edge, idx) => {
+    edges.push({
+      id: edge.id || `e-${idx}`,
+      source: edge.source,
+      target: edge.target,
+      label: edge.label || edge.relationship_type || 'relates to',
+      type: 'smoothstep',
+      animated: true,
+      style: { stroke: '#94a3b8', strokeWidth: 1.5 + (edge.weight || 1) * 0.5 },
+      labelStyle: { fontSize: 10, fill: '#64748b' },
+      labelBgStyle: { fill: '#f8fafc', fillOpacity: 0.9 },
+      labelBgPadding: [4, 4],
+      labelBgBorderRadius: 4,
     })
   })
 
@@ -177,56 +155,83 @@ export default function Graphs() {
   const [nodes, setNodes, onNodesChange] = useNodesState([])
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
   const [reactFlowInstance, setReactFlowInstance] = useState(null)
+  const [topology, setTopology] = useState(null)
+  const [error, setError] = useState('')
 
   useEffect(() => {
-    const fetchEntities = async () => {
+    const fetchTopology = async () => {
       try {
-        const data = await listEntities()
-        const fetched = data.entities || data || []
-        if (fetched.length === 0) {
-          setEntities(getDemoEntities())
+        const data = await getGraphTopology()
+        if (data && data.nodes && data.nodes.length > 0) {
+          setTopology(data)
+          // Convert to entity format for list view
+          const entityList = data.nodes.map((n) => ({
+            id: n.id,
+            name: n.label,
+            type: n.type,
+            properties: n.properties,
+            relationships: data.edges
+              .filter((e) => e.source === n.id || e.target === n.id)
+              .map((e) => ({
+                type: e.label,
+                target: e.source === n.id ? e.target : e.source,
+              })),
+          }))
+          setEntities(entityList)
         } else {
-          setEntities(fetched)
+          const demo = getDemoEntities()
+          setEntities(demo)
+          setTopology(demoToTopology(demo))
         }
       } catch (err) {
-        console.error('Failed to fetch entities:', err)
-        setEntities(getDemoEntities())
+        console.error('Failed to fetch topology:', err)
+        setError('Backend not connected — showing demo data')
+        const demo = getDemoEntities()
+        setEntities(demo)
+        setTopology(demoToTopology(demo))
       } finally {
         setIsLoading(false)
       }
     }
-    fetchEntities()
+    fetchTopology()
   }, [setEntities])
 
   useEffect(() => {
-    const filtered = (entities || []).filter((entity) => {
+    if (!topology) return
+
+    const filteredNodes = topology.nodes.filter((node) => {
+      if (!searchTerm) return true
       const term = searchTerm.toLowerCase()
       return (
-        (entity.name || '').toLowerCase().includes(term) ||
-        (entity.type || '').toLowerCase().includes(term) ||
-        (entity.description || '').toLowerCase().includes(term)
+        (node.label || '').toLowerCase().includes(term) ||
+        (node.type || '').toLowerCase().includes(term)
       )
     })
-    const { nodes: flowNodes, edges: flowEdges } = buildFlowGraph(filtered)
+
+    const filteredNodeIds = new Set(filteredNodes.map((n) => n.id))
+    const filteredEdges = topology.edges.filter(
+      (e) => filteredNodeIds.has(e.source) && filteredNodeIds.has(e.target)
+    )
+
+    const { nodes: flowNodes, edges: flowEdges } = buildFlowGraph({
+      nodes: filteredNodes,
+      edges: filteredEdges,
+    })
     setNodes(flowNodes)
     setEdges(flowEdges)
-  }, [entities, searchTerm, setNodes, setEdges])
+  }, [topology, searchTerm, setNodes, setEdges])
 
   const onNodeClick = useCallback((_, node) => {
-    const entity = (entities || []).find(
-      (e) => (e.id || e.name) === (node.id || node.data.label)
-    )
+    const entity = (entities || []).find((e) => e.id === node.id)
     if (entity) {
       setSelectedEntity(entity)
     } else {
-      // Implicit node
       setSelectedEntity({
         id: node.id,
         name: node.data.label,
         type: node.data.type,
-        description: node.data.description,
         properties: node.data.properties,
-        relationships: node.data.relationships,
+        relationships: [],
       })
     }
   }, [entities])
@@ -252,19 +257,69 @@ export default function Graphs() {
         </p>
       </div>
 
+      {/* Stats Bar */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="card p-3 flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-primary-50 dark:bg-primary-900/20">
+            <Network className="w-4 h-4 text-primary-600 dark:text-primary-400" />
+          </div>
+          <div>
+            <p className="text-lg font-bold text-gray-900 dark:text-white">{topology?.nodes?.length || 0}</p>
+            <p className="text-[10px] text-gray-500 dark:text-gray-400">Entities</p>
+          </div>
+        </div>
+        <div className="card p-3 flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-green-50 dark:bg-green-900/20">
+            <Link2 className="w-4 h-4 text-green-600 dark:text-green-400" />
+          </div>
+          <div>
+            <p className="text-lg font-bold text-gray-900 dark:text-white">{topology?.edges?.length || 0}</p>
+            <p className="text-[10px] text-gray-500 dark:text-gray-400">Relationships</p>
+          </div>
+        </div>
+        <div className="card p-3 flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-purple-50 dark:bg-purple-900/20">
+            <GitBranch className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+          </div>
+          <div>
+            <p className="text-lg font-bold text-gray-900 dark:text-white">
+              {new Set(topology?.nodes?.map((n) => n.type)).size || 0}
+            </p>
+            <p className="text-[10px] text-gray-500 dark:text-gray-400">Entity Types</p>
+          </div>
+        </div>
+        <div className="card p-3 flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-amber-50 dark:bg-amber-900/20">
+            <BarChart3 className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+          </div>
+          <div>
+            <p className="text-lg font-bold text-gray-900 dark:text-white">
+              {topology?.edges?.length
+                ? (topology.edges.length / Math.max(1, topology.nodes.length)).toFixed(2)
+                : '0.00'}
+            </p>
+            <p className="text-[10px] text-gray-500 dark:text-gray-400">Avg Connections</p>
+          </div>
+        </div>
+      </div>
+
       {/* React Flow Graph */}
       <div className="card p-0 overflow-hidden" style={{ height: 520 }}>
         <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between bg-gray-50 dark:bg-gray-800/50">
           <div className="flex items-center gap-2">
             <Network className="w-4 h-4 text-primary-600 dark:text-primary-400" />
-            <h3 className="font-semibold text-gray-900 dark:text-white text-sm">
-              Graph Visualization
-            </h3>
+            <h3 className="font-semibold text-gray-900 dark:text-white text-sm">Graph Visualization</h3>
             <span className="text-xs text-gray-500 dark:text-gray-400">
               {nodes.length} nodes · {edges.length} edges
             </span>
           </div>
           <div className="flex items-center gap-1">
+            {error && (
+              <span className="text-[10px] text-amber-600 dark:text-amber-400 flex items-center gap-1 mr-2">
+                <AlertTriangle className="w-3 h-3" />
+                {error}
+              </span>
+            )}
             <button
               onClick={onFitView}
               className="p-1.5 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
@@ -309,6 +364,8 @@ export default function Graphs() {
                     ['Algorithm', '#ec4899'],
                     ['Ecosystem', '#8b5cf6'],
                     ['Organization', '#06b6d4'],
+                    ['Model', '#14b8a6'],
+                    ['Company', '#6366f1'],
                   ].map(([type, color]) => (
                     <div key={type} className="flex items-center gap-1">
                       <span className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
@@ -329,7 +386,7 @@ export default function Graphs() {
           <input
             type="text"
             className="input pl-11"
-            placeholder="Search entities by name, type, or description..."
+            placeholder="Filter entities by name or type..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -342,9 +399,7 @@ export default function Graphs() {
           {(entities || []).length === 0 ? (
             <div className="card text-center py-12">
               <Network className="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600 mb-3" />
-              <p className="text-gray-500 dark:text-gray-400">
-                No entities found in the graph
-              </p>
+              <p className="text-gray-500 dark:text-gray-400">No entities found in the graph</p>
             </div>
           ) : (
             (entities || [])
@@ -386,6 +441,18 @@ export default function Graphs() {
                             {entity.description}
                           </p>
                         )}
+                        {entity.properties && Object.keys(entity.properties).length > 0 && (
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {Object.entries(entity.properties).slice(0, 3).map(([k, v]) => (
+                              <span
+                                key={k}
+                                className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
+                              >
+                                {k}: {String(v).slice(0, 20)}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
                     <ChevronRight className="w-5 h-5 text-gray-400 flex-shrink-0 mt-1" />
@@ -414,32 +481,22 @@ export default function Graphs() {
 
                 {selectedEntity.description && (
                   <div>
-                    <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Description
-                    </h4>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                      {selectedEntity.description}
-                    </p>
+                    <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description</h4>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">{selectedEntity.description}</p>
                   </div>
                 )}
 
                 {selectedEntity.properties && Object.keys(selectedEntity.properties).length > 0 && (
                   <div>
-                    <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Properties
-                    </h4>
+                    <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Properties</h4>
                     <div className="space-y-1.5">
                       {Object.entries(selectedEntity.properties).map(([key, value]) => (
                         <div
                           key={key}
                           className="flex items-center justify-between text-sm px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-700/50"
                         >
-                          <span className="text-gray-600 dark:text-gray-400 capitalize">
-                            {key}
-                          </span>
-                          <span className="font-medium text-gray-900 dark:text-white">
-                            {String(value)}
-                          </span>
+                          <span className="text-gray-600 dark:text-gray-400 capitalize">{key}</span>
+                          <span className="font-medium text-gray-900 dark:text-white">{String(value)}</span>
                         </div>
                       ))}
                     </div>
@@ -450,7 +507,7 @@ export default function Graphs() {
                   <div>
                     <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
                       <Link2 className="w-4 h-4" />
-                      Relationships
+                      Relationships ({selectedEntity.relationships.length})
                     </h4>
                     <div className="space-y-2">
                       {selectedEntity.relationships.map((rel, i) => (
@@ -458,13 +515,9 @@ export default function Graphs() {
                           key={i}
                           className="flex items-center gap-2 text-sm px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-700/50"
                         >
-                          <span className="text-gray-900 dark:text-white font-medium">
-                            {rel.type || 'relates to'}
-                          </span>
+                          <span className="text-gray-900 dark:text-white font-medium">{rel.type || 'relates to'}</span>
                           <ChevronRight className="w-3 h-3 text-gray-400" />
-                          <span className="text-gray-600 dark:text-gray-400">
-                            {rel.target || rel.name || 'Unknown'}
-                          </span>
+                          <span className="text-gray-600 dark:text-gray-400">{rel.target || rel.name || 'Unknown'}</span>
                         </div>
                       ))}
                     </div>
@@ -485,108 +538,170 @@ export default function Graphs() {
   )
 }
 
+function demoToTopology(demoEntities) {
+  const nodes = demoEntities.map((e) => ({
+    id: e.id,
+    label: e.name,
+    type: e.type,
+    properties: e.properties,
+  }))
+
+  const edges = []
+  demoEntities.forEach((entity) => {
+    entity.relationships?.forEach((rel, idx) => {
+      const target = demoEntities.find((e) => e.name === rel.target)
+      if (target) {
+        edges.push({
+          id: `e-${entity.id}-${target.id}-${idx}`,
+          source: entity.id,
+          target: target.id,
+          label: rel.type,
+          weight: 1,
+        })
+      }
+    })
+  })
+
+  return { nodes, edges }
+}
+
 function getDemoEntities() {
   return [
     {
-      id: 'demo-1',
-      name: 'Blockchain',
-      type: 'Technology',
-      description: 'A decentralized, distributed ledger technology that records transactions across multiple computers.',
-      properties: { origin: '2008', creator: 'Satoshi Nakamoto', category: 'Distributed Systems' },
+      id: 'openai',
+      name: 'OpenAI',
+      type: 'Company',
+      description: 'AI research and deployment company behind GPT models and ChatGPT.',
+      properties: { founded: '2015', valuation: '$80B+', hq: 'San Francisco', key_products: 'GPT-4, ChatGPT, DALL-E' },
       relationships: [
-        { type: 'enables', target: 'Cryptocurrency' },
-        { type: 'uses', target: 'Consensus Mechanisms' },
-        { type: 'powers', target: 'Smart Contracts' },
+        { type: 'funded_by', target: 'Microsoft' },
+        { type: 'competes_with', target: 'Anthropic' },
+        { type: 'partnered_with', target: 'NVIDIA' },
+        { type: 'creates', target: 'GPT-4o' },
       ],
     },
     {
-      id: 'demo-2',
-      name: 'Cryptocurrency',
-      type: 'Financial Instrument',
-      description: 'Digital or virtual currency that uses cryptography for security and operates on blockchain networks.',
-      properties: { market_cap: '$2.5T', top_coins: 'Bitcoin, Ethereum', volatility: 'High' },
+      id: 'microsoft',
+      name: 'Microsoft',
+      type: 'Company',
+      description: 'Technology corporation and major investor in OpenAI, integrating AI across Azure and Office.',
+      properties: { founded: '1975', market_cap: '$3T+', ceo: 'Satya Nadella', cloud: 'Azure' },
       relationships: [
-        { type: 'built_on', target: 'Blockchain' },
-        { type: 'regulated_by', target: 'SEC' },
-        { type: 'traded_on', target: 'Coinbase' },
+        { type: 'invests_in', target: 'OpenAI' },
+        { type: 'competes_with', target: 'Google' },
+        { type: 'uses_chips_from', target: 'NVIDIA' },
+        { type: 'integrates', target: 'Copilot' },
       ],
     },
     {
-      id: 'demo-3',
-      name: 'Smart Contracts',
-      type: 'Software',
-      description: 'Self-executing contracts with the terms of the agreement directly written into code.',
-      properties: { platforms: 'Ethereum, Solana', language: 'Solidity', use_cases: 'DeFi, NFTs' },
+      id: 'nvidia',
+      name: 'NVIDIA',
+      type: 'Company',
+      description: 'Dominant AI chip manufacturer providing GPUs that power most large model training.',
+      properties: { founded: '1993', market_cap: '$3T+', key_product: 'H100, B200 GPUs', data_center_revenue: '$47B' },
       relationships: [
-        { type: 'runs_on', target: 'Blockchain' },
-        { type: 'powers', target: 'DeFi' },
-        { type: 'enables', target: 'NFTs' },
+        { type: 'supplies_chips_to', target: 'OpenAI' },
+        { type: 'supplies_chips_to', target: 'Microsoft' },
+        { type: 'supplies_chips_to', target: 'Google' },
+        { type: 'partnered_with', target: 'Anthropic' },
+        { type: 'competes_with', target: 'AMD' },
       ],
     },
     {
-      id: 'demo-4',
-      name: 'Consensus Mechanisms',
-      type: 'Algorithm',
-      description: 'Protocols that ensure all nodes in a blockchain network agree on the current state of the ledger.',
-      properties: { types: 'PoW, PoS, DPoS', energy_usage: 'Variable', security: 'High' },
+      id: 'anthropic',
+      name: 'Anthropic',
+      type: 'Company',
+      description: 'AI safety company founded by former OpenAI researchers, creator of Claude models.',
+      properties: { founded: '2021', valuation: '$18B+', focus: 'AI Safety', key_products: 'Claude 3.5 Sonnet, Opus' },
       relationships: [
-        { type: 'secures', target: 'Blockchain' },
-        { type: 'validates', target: 'Cryptocurrency' },
+        { type: 'founded_by_ex', target: 'OpenAI' },
+        { type: 'funded_by', target: 'Google' },
+        { type: 'competes_with', target: 'OpenAI' },
+        { type: 'partnered_with', target: 'Amazon' },
       ],
     },
     {
-      id: 'demo-5',
-      name: 'DeFi',
-      type: 'Ecosystem',
-      description: 'Decentralized Finance — financial services built on blockchain without traditional intermediaries.',
-      properties: { tvl: '$100B+', protocols: 'Uniswap, Aave', risk: 'Smart contract risk' },
+      id: 'google',
+      name: 'Google',
+      type: 'Company',
+      description: 'Alphabet subsidiary developing Gemini models, DeepMind research, and Bard/AI Search.',
+      properties: { founded: '1998', parent: 'Alphabet', key_products: 'Gemini 1.5, DeepMind, Bard', cloud: 'GCP' },
       relationships: [
-        { type: 'uses', target: 'Smart Contracts' },
-        { type: 'disrupts', target: 'Traditional Finance' },
-        { type: 'built_on', target: 'Ethereum' },
+        { type: 'invests_in', target: 'Anthropic' },
+        { type: 'competes_with', target: 'OpenAI' },
+        { type: 'competes_with', target: 'Microsoft' },
+        { type: 'creates', target: 'Gemini 1.5' },
+        { type: 'owns', target: 'DeepMind' },
       ],
     },
     {
-      id: 'demo-6',
-      name: 'NFTs',
-      type: 'Technology',
-      description: 'Non-Fungible Tokens — unique digital assets verified using blockchain technology.',
-      properties: { market: '$15B', standard: 'ERC-721', use_cases: 'Art, Gaming, Music' },
+      id: 'gpt-4o',
+      name: 'GPT-4o',
+      type: 'Model',
+      description: 'OpenAI flagship multimodal model ("omni") with native audio, vision, and text reasoning.',
+      properties: { release: 'May 2024', modality: 'Text, Image, Audio', context: '128K', benchmark_mmlu: '88.7%' },
       relationships: [
-        { type: 'built_on', target: 'Blockchain' },
-        { type: 'powered_by', target: 'Smart Contracts' },
+        { type: 'created_by', target: 'OpenAI' },
+        { type: 'competes_with', target: 'Gemini 1.5' },
+        { type: 'competes_with', target: 'Claude 3.5' },
       ],
     },
     {
-      id: 'demo-7',
-      name: 'Ethereum',
-      type: 'Technology',
-      description: 'A decentralized, open-source blockchain with smart contract functionality.',
-      properties: { launched: '2015', founder: 'Vitalik Buterin', consensus: 'PoS' },
+      id: 'gemini-1.5',
+      name: 'Gemini 1.5',
+      type: 'Model',
+      description: 'Google multimodal model with up to 2M token context window and Mixture-of-Experts architecture.',
+      properties: { release: 'Feb 2024', modality: 'Text, Image, Audio, Video', context: '2M tokens', architecture: 'MoE' },
       relationships: [
-        { type: 'is_a', target: 'Blockchain' },
-        { type: 'supports', target: 'Smart Contracts' },
-        { type: 'hosts', target: 'DeFi' },
+        { type: 'created_by', target: 'Google' },
+        { type: 'competes_with', target: 'GPT-4o' },
+        { type: 'competes_with', target: 'Claude 3.5' },
       ],
     },
     {
-      id: 'demo-8',
-      name: 'SEC',
+      id: 'claude-3.5',
+      name: 'Claude 3.5 Sonnet',
+      type: 'Model',
+      description: 'Anthropic model with advanced reasoning, coding, and agentic capabilities via Artifacts.',
+      properties: { release: 'June 2024', modality: 'Text, Image', context: '200K', strength: 'Reasoning, Coding' },
+      relationships: [
+        { type: 'created_by', target: 'Anthropic' },
+        { type: 'competes_with', target: 'GPT-4o' },
+        { type: 'competes_with', target: 'Gemini 1.5' },
+      ],
+    },
+    {
+      id: 'copilot',
+      name: 'Microsoft Copilot',
+      type: 'Product',
+      description: 'AI assistant integrated across Microsoft 365, Windows, and GitHub, powered by OpenAI models.',
+      properties: { launch: '2023', users: '400M+', platforms: 'Windows, Office, GitHub', model: 'GPT-4' },
+      relationships: [
+        { type: 'powered_by', target: 'OpenAI' },
+        { type: 'integrates_with', target: 'Microsoft' },
+      ],
+    },
+    {
+      id: 'deepmind',
+      name: 'DeepMind',
       type: 'Organization',
-      description: 'U.S. Securities and Exchange Commission — regulates securities markets.',
-      properties: { country: 'USA', formed: '1934', focus: 'Securities regulation' },
+      description: 'Google AI research lab, merged with Google Brain in 2023, behind AlphaGo, AlphaFold, and Gemini.',
+      properties: { founded: '2010', acquired: '2014', merged: '2023', key_work: 'AlphaFold, Gemini' },
       relationships: [
-        { type: 'regulates', target: 'Cryptocurrency' },
+        { type: 'owned_by', target: 'Google' },
+        { type: 'collaborates_with', target: 'Gemini 1.5' },
       ],
     },
     {
-      id: 'demo-9',
-      name: 'Coinbase',
-      type: 'Organization',
-      description: 'A secure online platform for buying, selling, transferring, and storing cryptocurrency.',
-      properties: { founded: '2012', users: '100M+', hq: 'USA' },
+      id: 'amazon',
+      name: 'Amazon',
+      type: 'Company',
+      description: 'Cloud provider (AWS) and partner to Anthropic, offering Bedrock model hosting platform.',
+      properties: { founded: '1994', cloud: 'AWS', ai_platform: 'Bedrock', investment: '$4B in Anthropic' },
       relationships: [
-        { type: 'lists', target: 'Cryptocurrency' },
+        { type: 'partners_with', target: 'Anthropic' },
+        { type: 'competes_with', target: 'Microsoft' },
+        { type: 'competes_with', target: 'Google' },
       ],
     },
   ]

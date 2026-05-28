@@ -118,3 +118,9 @@ export const listEntities = async () => {
   const response = await api.get('/api/v1/graphs/entities')
   return response.data
 }
+
+export const getGraphTopology = async () => {
+  const api = getApi()
+  const response = await api.get('/api/v1/graphs/topology')
+  return response.data
+}

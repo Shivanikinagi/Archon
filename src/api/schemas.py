@@ -111,6 +111,24 @@ class ResearchSessionResponse(BaseModel):
     current_step: Optional[str] = None
 
 
+class ComparisonTableResponse(BaseModel):
+    """Comparison table embedded in a report."""
+    title: str
+    headers: List[str]
+    rows: List[List[str]]
+    caption: Optional[str] = None
+
+
+class ConfidenceScoreResponse(BaseModel):
+    """Confidence scores for report sections."""
+    overall: float = Field(..., ge=0.0, le=1.0)
+    source_quality: Optional[float] = Field(None, ge=0.0, le=1.0)
+    fact_check: Optional[float] = Field(None, ge=0.0, le=1.0)
+    verified_ratio: Optional[float] = Field(None, ge=0.0, le=1.0)
+    review_quality: Optional[float] = Field(None, ge=0.0, le=1.0)
+    by_section: Optional[dict] = None
+
+
 class ResearchReportResponse(BaseModel):
     """Research report response."""
     report_id: str
@@ -120,9 +138,11 @@ class ResearchReportResponse(BaseModel):
     format: str = "markdown"
     citations: List[dict] = Field(default_factory=list)
     sources: List[dict] = Field(default_factory=list)
+    comparison_tables: List[ComparisonTableResponse] = Field(default_factory=list)
     workflow_trace: Optional[List[dict]] = None
     reasoning_path: Optional[str] = None
-    confidence_scores: Optional[dict] = None
+    confidence_scores: Optional[ConfidenceScoreResponse] = None
+    is_relationship_query: bool = False
     generated_at: datetime
     word_count: int
 

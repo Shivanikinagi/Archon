@@ -1,16 +1,72 @@
 """
-Knowledge graph routes.
+Knowledge graph routes with topology support for real visualization.
 """
 
 from typing import List, Optional
 from fastapi import APIRouter, HTTPException, status, Depends, Query
 
-from src.api.schemas import EntityResponse, RelationshipResponse, GraphSearchResponse, PathResponse
+from src.api.schemas import (
+    EntityResponse, RelationshipResponse, GraphSearchResponse,
+    PathResponse
+)
 from src.api.dependencies import get_current_user, get_db, MockDBSession
 from src.core.logger import get_logger
 
 logger = get_logger(__name__)
 router = APIRouter()
+
+
+@router.get(
+    "/topology",
+    response_model=dict,
+    summary="Get graph topology",
+    description="Return all nodes and edges formatted for graph visualization libraries.",
+)
+async def get_graph_topology(
+    current_user: dict = Depends(get_current_user),
+    db: MockDBSession = Depends(get_db),
+):
+    """Return the full graph topology as nodes + edges for React Flow / D3 / Cytoscape."""
+    try:
+        nodes = []
+        edges = []
+        entity_map = {}
+
+        for e in db.entities:
+            node_id = e.get("node_id", "")
+            entity_map[node_id] = e
+            nodes.append({
+                "id": node_id,
+                "label": e.get("label", ""),
+                "type": e.get("node_type", "Entity"),
+                "properties": e.get("properties", {}),
+            })
+
+        for r in db.relationships:
+            edges.append({
+                "id": r.get("edge_id", ""),
+                "source": r.get("source_node_id", ""),
+                "target": r.get("target_node_id", ""),
+                "label": r.get("relationship_type", ""),
+                "weight": r.get("weight", 1.0),
+                "properties": r.get("properties", {}),
+            })
+
+        return {
+            "nodes": nodes,
+            "edges": edges,
+            "stats": {
+                "node_count": len(nodes),
+                "edge_count": len(edges),
+                "node_types": list(set(n["type"] for n in nodes)),
+            },
+        }
+    except Exception as e:
+        logger.error(f"Failed to get graph topology: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
 
 
 @router.get(

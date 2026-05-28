@@ -43,7 +43,7 @@ const depthOptions = [
 
 const SUGGESTED_QUERIES = [
   {
-    query: 'How are OpenAI, Microsoft, NVIDIA, and Anthropic connected in the generative AI ecosystem?',
+    query: 'How are Microsoft, OpenAI, NVIDIA, and Anthropic connected in the generative AI ecosystem?',
     icon: GitBranch,
     label: 'Relationship Analysis',
   },
@@ -66,6 +66,46 @@ const SUGGESTED_QUERIES = [
     query: 'How does AI agent infrastructure connect LLMs, tool use, memory systems, and planning frameworks?',
     icon: BrainCircuit,
     label: 'System Architecture',
+  },
+  {
+    query: 'Compare RAG vs GraphRAG architectures: strengths, weaknesses, and when to use each',
+    icon: BarChart3,
+    label: 'Architecture Comparison',
+  },
+  {
+    query: 'Evolution of transformer architectures after GPT-3: what changed and why it matters',
+    icon: TrendingUp,
+    label: 'Architecture Evolution',
+  },
+  {
+    query: 'Top approaches for reducing hallucinations in LLMs: techniques, benchmarks, and trade-offs',
+    icon: ShieldCheck,
+    label: 'LLM Safety',
+  },
+  {
+    query: 'Latest techniques in agentic AI systems: planning, tool use, and multi-agent coordination',
+    icon: BrainCircuit,
+    label: 'Agentic AI',
+  },
+  {
+    query: 'Which companies invested in organizations developing generative AI models?',
+    icon: GitBranch,
+    label: 'Investment Network',
+  },
+  {
+    query: 'Find relationships between AI chip companies and LLM providers',
+    icon: Network,
+    label: 'Supply Chain',
+  },
+  {
+    query: 'Impact of recent EU AI regulations on generative AI companies',
+    icon: Globe,
+    label: 'Policy & AI',
+  },
+  {
+    query: 'Recent breakthroughs in open-source LLMs: benchmarks, licensing, and community impact',
+    icon: TrendingUp,
+    label: 'Open Source',
   },
 ]
 

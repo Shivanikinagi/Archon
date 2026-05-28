@@ -6,8 +6,8 @@ Provides graph database operations for knowledge graph and entity relationships.
 import asyncio
 import logging
 from typing import List, Dict, Any, Optional, Tuple
-from neo4j import AsyncDriver, AsyncSession as Neo4jAsyncSession
-from neo4j import asyncio_driver, auth
+from neo4j import AsyncDriver
+from neo4j import AsyncGraphDatabase
 
 logger = logging.getLogger(__name__)
 
@@ -45,10 +45,9 @@ class Neo4jClient:
             Exception: If connection fails
         """
         try:
-            self.driver = asyncio_driver(
+            self.driver = AsyncGraphDatabase.driver(
                 self.uri,
                 auth=(self.username, self.password),
-                encrypted=False,
             )
             
             # Test connection
